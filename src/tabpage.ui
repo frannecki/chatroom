@@ -1,0 +1,206 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>TabPage</class>
+ <widget class="QMainWindow" name="TabPage">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>681</width>
+    <height>706</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>DemoApp</string>
+  </property>
+  <property name="windowIcon">
+   <iconset resource="../resources/images.qrc">
+    <normaloff>:/images/icon.png</normaloff>:/images/icon.png</iconset>
+  </property>
+  <property name="locale">
+   <locale language="English" country="UnitedStates"/>
+  </property>
+  <widget class="QWidget" name="centralwidget">
+   <layout class="QGridLayout" name="gridLayout">
+    <item row="0" column="0">
+     <widget class="QWidget" name="widget" native="true">
+      <layout class="QGridLayout" name="gridLayout_3">
+       <item row="0" column="0">
+        <widget class="QGroupBox" name="groupBox_chat">
+         <property name="title">
+          <string>Chat</string>
+         </property>
+         <layout class="QGridLayout" name="gridLayout_2">
+          <item row="1" column="0" colspan="2">
+           <widget class="QWidget" name="select_widget" native="true">
+            <layout class="QGridLayout" name="gridLayout_4">
+             <item row="1" column="0">
+              <widget class="QComboBox" name="combo_box_chat">
+               <property name="sizePolicy">
+                <sizepolicy hsizetype="Maximum" vsizetype="Fixed">
+                 <horstretch>0</horstretch>
+                 <verstretch>0</verstretch>
+                </sizepolicy>
+               </property>
+               <item>
+                <property name="text">
+                 <string>Johnny</string>
+                </property>
+               </item>
+               <item>
+                <property name="text">
+                 <string>Kimberly</string>
+                </property>
+               </item>
+               <item>
+                <property name="text">
+                 <string>David</string>
+                </property>
+               </item>
+               <item>
+                <property name="text">
+                 <string>Alice</string>
+                </property>
+               </item>
+               <item>
+                <property name="text">
+                 <string>Sally</string>
+                </property>
+               </item>
+               <item>
+                <property name="text">
+                 <string>Wolfgang</string>
+                </property>
+               </item>
+              </widget>
+             </item>
+             <item row="1" column="1">
+              <widget class="QPushButton" name="ok_button">
+               <property name="sizePolicy">
+                <sizepolicy hsizetype="Minimum" vsizetype="Preferred">
+                 <horstretch>0</horstretch>
+                 <verstretch>0</verstretch>
+                </sizepolicy>
+               </property>
+               <property name="text">
+                <string>OK</string>
+               </property>
+              </widget>
+             </item>
+             <item row="0" column="0" colspan="2">
+              <widget class="QLabel" name="label">
+               <property name="text">
+                <string>Choose whoever you'd like to chat with:</string>
+               </property>
+              </widget>
+             </item>
+             <item row="1" column="2">
+              <widget class="QPushButton" name="cancel_button">
+               <property name="text">
+                <string>Cancel</string>
+               </property>
+              </widget>
+             </item>
+             <item row="2" column="0" colspan="3">
+              <spacer name="verticalSpacer">
+               <property name="orientation">
+                <enum>Qt::Vertical</enum>
+               </property>
+               <property name="sizeHint" stdset="0">
+                <size>
+                 <width>20</width>
+                 <height>40</height>
+                </size>
+               </property>
+              </spacer>
+             </item>
+            </layout>
+           </widget>
+          </item>
+          <item row="2" column="0" colspan="2">
+           <widget class="QWidget" name="chat_widget" native="true">
+            <layout class="QGridLayout" name="gridLayout_5">
+             <item row="3" column="0">
+              <spacer name="horizontalSpacer">
+               <property name="orientation">
+                <enum>Qt::Horizontal</enum>
+               </property>
+               <property name="sizeHint" stdset="0">
+                <size>
+                 <width>40</width>
+                 <height>20</height>
+                </size>
+               </property>
+              </spacer>
+             </item>
+             <item row="3" column="2">
+              <widget class="QPushButton" name="send_button">
+               <property name="sizePolicy">
+                <sizepolicy hsizetype="MinimumExpanding" vsizetype="Fixed">
+                 <horstretch>0</horstretch>
+                 <verstretch>0</verstretch>
+                </sizepolicy>
+               </property>
+               <property name="text">
+                <string>Send</string>
+               </property>
+               <property name="shortcut">
+                <string>Ctrl+Return</string>
+               </property>
+              </widget>
+             </item>
+             <item row="0" column="0" rowspan="2" colspan="3">
+              <widget class="QListView" name="chatBox"/>
+             </item>
+             <item row="2" column="0" colspan="3">
+              <widget class="QLineEdit" name="line_edit_msg"/>
+             </item>
+            </layout>
+           </widget>
+          </item>
+         </layout>
+        </widget>
+       </item>
+      </layout>
+     </widget>
+    </item>
+   </layout>
+  </widget>
+  <widget class="QStatusBar" name="statusbar"/>
+  <action name="action_Quit">
+   <property name="text">
+    <string>&amp;Quit</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+Q</string>
+   </property>
+   <property name="shortcutContext">
+    <enum>Qt::ApplicationShortcut</enum>
+   </property>
+  </action>
+  <action name="action_Preferences">
+   <property name="text">
+    <string>&amp;Preferences</string>
+   </property>
+  </action>
+  <action name="action_About">
+   <property name="text">
+    <string>&amp;About</string>
+   </property>
+  </action>
+  <action name="actionOpen">
+   <property name="text">
+    <string>&amp;Open</string>
+   </property>
+  </action>
+  <action name="actionClose">
+   <property name="text">
+    <string>&amp;Close</string>
+   </property>
+  </action>
+ </widget>
+ <resources>
+  <include location="../resources/images.qrc"/>
+ </resources>
+ <connections/>
+</ui>
