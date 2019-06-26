@@ -6,6 +6,7 @@
 #include <QCloseEvent>
 #include <QSettings>
 #include <QMessageBox>
+#include <QFileDialog>
 
 #include "thread_client.h"
 
@@ -33,6 +34,7 @@ private slots:
     void on_close_current_button_clicked();
     void on_open_new_button_clicked();
     void on_action_Quit_triggered();
+    void on_action_Open_triggered();
     void on_quit_button_clicked();
     void on_checkbox_remember_settings_stateChanged(int state);
 
@@ -44,10 +46,13 @@ private slots:
     void on_msg_from_new(int);
     void on_contact_selected(int);
     void on_contact_cancelled(int);
+    void on_file_open_error();
+    //void on_file_recvd(int, std::string);
 
 private:
     Ui::MainWindow *ui;
     thread_client client_;
+    bool is_client_launched;
     TabPage tabpages[MAXCONTACTS+1];
     void closeExec();
 };

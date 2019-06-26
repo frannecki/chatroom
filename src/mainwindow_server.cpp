@@ -63,8 +63,8 @@ void MainWindow_::ReadSettings(){
     QSettings settings("Qt_socket_server", "chatroom_demo");
     restoreGeometry(settings.value("geometry").toByteArray());
     restoreState(settings.value("windowState").toByteArray());
-    QString addr_srv = settings.value("addr_srv",QString("localhost")).toString();
-    QString port_srv = settings.value("port_srv", QString("1234")).toString();
+    QString addr_srv = settings.value("addr_srv",QString("127.0.0.1")).toString();
+    QString port_srv = settings.value("port_srv", QString("11311")).toString();
     ui->line_edit_addr->setText(addr_srv);
     ui->line_edit_port->setText(port_srv);
 }

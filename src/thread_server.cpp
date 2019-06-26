@@ -5,6 +5,7 @@ thread_server::thread_server(){}
 bool thread_server::init(const std::string& addr_srv, const std::string& port_srv){
     
     mutexRunning = new QMutex();
+    msg_threadpool.setMaxThreadCount(20);
 
     if((socket_server = socket(AF_INET, SOCK_STREAM, 0)) < 0){
         outputLog(std::string("[ERROR] Opening socket."));
@@ -43,6 +44,10 @@ thread_server::~thread_server(){
 void thread_server::closeAll(){
     QMutexLocker locker(mutexRunning);
     is_Running = false;
+    for(int i = 0; i < cntfd; ++i){
+        close(uIDs[i].sockfd);
+    }
+    close(socket_server);
 }
 
 void thread_server::outputLog(const std::string& logcont){
@@ -65,6 +70,7 @@ void thread_server::loopTask(){
     std::string str;
     int recvLen;
     char buff[MAXBUFFLEN];
+    bzero(buff, MAXBUFFLEN);
     typeMsg msg_;
     int maxsock = socket_server;
     while(true){
@@ -79,26 +85,25 @@ void thread_server::loopTask(){
         select(maxsock+1, &fs, NULL, NULL, NULL);
         for(int i = 0; i < cntfd; ++i){
             if(FD_ISSET(uIDs[i].sockfd, &fs)){
+                bzero(buff, strlen(buff));
                 recvLen = recv(uIDs[i].sockfd, buff, MAXBUFFLEN, 0);
                 if(recvLen < 0){
                     outputLog(std::string("[Error] recv() failed!"));
-                    close(uIDs[i].sockfd);
-
-                    contacts_ind.erase(uIDs[i].sockfd);
-                    contacts.erase(uIDs[i].uname);
-                    FD_CLR(uIDs[i].sockfd, &fs);
-                    
-                    uIDs[i] = uIDs[--cntfd];
-                    uIDs[cntfd].reset();
+                    clrsocket(i);
                 }
                 if(recvLen == 0)  continue;
                 else{
-                    buff[recvLen] = '\0';
                     parseSMsg(buff, msg_);
                     outputLog(std::string("[INFO] Forwarding message from ") + 
                               uIDs[i].uname + std::string(" to ") + 
                               std::string(msg_.sock_dest) + std::string("..."));
-                    forwardGroupMsg(maxsock, uIDs[i].sockfd, msg_);
+                    
+                    if(msg_.btype == CLIENT_LOGOUT){
+                        outputLog("[INFO] Client logout requested.");
+                        clrsocket(i);
+                    }
+                    //forwardGroupMsg(maxsock, uIDs[i].sockfd, msg_);
+                    else  msg_threadpool.start(new msg_forwarder(maxsock, uIDs[i].sockfd, msg_, this));
                 }
             }
         }
@@ -112,24 +117,23 @@ void thread_server::loopTask(){
             
             if(cntfd < MAXUSERNUM){
                 //usleep(100000);
-                buff[0] = '\0';
+                bzero(buff, strlen(buff));
                 recvLen = recv(socket_client, buff, MAXBUFFLEN, 0);
                 if(recvLen < 0){
-                    outputLog(std::string("[Error] recv() error! Closing client..."));
+                    outputLog(std::string("[ERROR] recv() error! Closing client..."));
                     perror("[ERROR] recv()");
                     close(socket_client);
                 }
                 else if(recvLen == 0){
-                    outputLog(std::string("[Error] Invalid username! Closing client..."));
+                    outputLog(std::string("[ERROR] Invalid username! Closing client..."));
                     close(socket_client);
                 }
                 else{
-                    buff[recvLen] = '\0';
                     // printf("[INFO] Nickname of client #%d is %s.\n", socket_client, buff);
                     if(contacts.count(std::string(buff)) > 0){
                         outputLog(std::string("[ERROR] Clients with the same username! Closing client..."));
                         buff[0] = '\0';
-                        strcat(buff, "server");
+                        strcat(buff, "server 3 ");
                         strcat(buff, " Connection Rejected!");
                         if(send(socket_client, buff, strlen(buff), 0) >= 0){
                             outputLog(std::string("[INFO] Rejection issued"));
@@ -145,7 +149,7 @@ void thread_server::loopTask(){
                         contacts_ind.insert(std::pair<int, std::string>(socket_client, uIDs[cntfd-1].uname));
                         
                         buff[0] = '\0';
-                        strcat(buff, "server");
+                        strcat(buff, "server 3 ");
                         strcat(buff, " Connection Established.");
                         send(socket_client, buff, strlen(buff), 0);
                         // parseSMsg(buff, msg_);
@@ -155,6 +159,13 @@ void thread_server::loopTask(){
             }
             else{
                 outputLog(std::string("[ERROR] Exceeded the maximum connections!"));
+                buff[0] = '\0';
+                strcat(buff, "server 3 ");
+                strcat(buff, " Connection Rejected!");
+                if(send(socket_client, buff, strlen(buff), 0) >= 0){
+                    outputLog(std::string("[INFO] Rejection issued"));
+                }
+                else outputLog(std::string("[ERROR] Rejection not issued"));
             }
         }
         {
@@ -162,32 +173,51 @@ void thread_server::loopTask(){
             if(!is_Running)  break;
         }
     }
-    for(int i = 0; i < cntfd; ++i){
-        close(uIDs[i].sockfd);
-    }
-    close(socket_server);
 }
 
 void thread_server::forwardGroupMsg(int cntfd, int sender,
                              const typeMsg &msg_){
+    
     if(msg_.msg[0] == '\0')  return;
     char buffer[MAXBUFFLEN];
-    buffer[0] = '\0';
+    bzero(buffer, strlen(buffer));
     strcat(buffer, contacts_ind[sender].c_str());
+    strcat(buffer, " ");
+    strcat(buffer, std::to_string(msg_.btype).c_str());
     strcat(buffer, " ");
     strcat(buffer, msg_.msg);
     if(0 == strcmp(msg_.sock_dest, "All")){
         for(int i = 0; i < cntfd; ++i){
-            if(uIDs[i].sockfd == sender)  continue;
-            send(uIDs[i].sockfd, buffer, strlen(buffer), 0);
+            if(uIDs[i].sockfd != sender)
+                send(uIDs[i].sockfd, buffer, strlen(buffer), 0);
         }
     }
     else{
-        int recver = contacts[std::string(msg_.sock_dest)];
         if(contacts.count(std::string(msg_.sock_dest)) == 0)  return;
-        outputLog(std::string("[INFO] Sending to #") + std::to_string(recver) + std::string(msg_.sock_dest) + std::string("..."));
-        send(recver, buffer, strlen(buffer), 0);
+        int recver = contacts[std::string(msg_.sock_dest)];
+        if(recver == sender)  return;
+        if(send(recver, buffer, strlen(buffer), 0) >= 0){
+            outputLog(std::string("[INFO] Sending to ") + std::string(msg_.sock_dest) + std::string("..."));
+        }
+        else{
+            outputLog(std::string("[ERROR] Sending failed. Closing client ") + std::string(msg_.sock_dest));
+            int idx = 0;
+            for(; idx < cntfd, uIDs[idx].sockfd != recver; ++idx);
+            clrsocket(idx);
+        }
     }
+}
+
+void thread_server::clrsocket(int idx){
+    if(idx < 0  ||  idx >= cntfd)  return;
+    outputLog(std::string("[INFO] Removing client ") + uIDs[idx].uname);
+    close(uIDs[idx].sockfd);
+    contacts_ind.erase(uIDs[idx].sockfd);
+    contacts.erase(uIDs[idx].uname);
+    FD_CLR(uIDs[idx].sockfd, &fs);
+                    
+    uIDs[idx] = uIDs[--cntfd];
+    uIDs[cntfd].reset();
 }
 
 QStringListModel* thread_server::logModel(){
@@ -197,3 +227,18 @@ QStringListModel* thread_server::logModel(){
 /*
 void thread_server::logUpdated(){}
 */
+
+msg_forwarder::msg_forwarder(int count, int asender, const typeMsg& _msg, thread_server *server_){
+    cntfd = count;
+    sender = asender;
+    msg_ = _msg;
+    server = server_;
+}
+
+msg_forwarder::~msg_forwarder(){
+    wait();
+}
+
+void msg_forwarder::run(){
+    server->forwardGroupMsg(cntfd, sender, msg_);
+}

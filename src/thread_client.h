@@ -6,6 +6,8 @@
 #include <QPixmap>
 #include <QThread>
 #include <QMutex>
+#include <QThreadPool>
+#include <QRunnable>
 #include <iostream>
 #include <sstream>
 #include <string.h>
@@ -32,7 +34,8 @@ public:
     void closeAll();
     void run();
     bool init(const std::string& addr_srv, const std::string& port_addr);
-    void sendMsg(const std::string&);
+    bool sendMsg(const std::string&);
+    void recvMsg(int, const typeMsg&);
     QStringListModel* chatBox(int);
     QStringListModel* logModel();
     void setNickname(const std::string&);
@@ -46,24 +49,47 @@ public:
 
 signals:
     void msgRecvd(int);
-    void fileRecvd();
+    void fileRecvd(int, std::string);
     void logUpdated();
     void msgFromNew(int);
     void connection_rejected();
     void connection_interrupted();
+    void file_open_error();
 
 private:
     QMutex *mutexRunning;
+    QMutex *mutexRecvFile;
+    QThreadPool thread_pool;
     bool is_Running;
+    bool is_Receiving_File;
     int socket_client;
     struct sockaddr_in dest;
     int cntcont;  // number of contacts (<= MAXCONTACTS).
     void outputLog(const std::string&);
     std::string nickname;
+    std::string fname, fileSrc;
     std::map<std::string, int> contacts;
     QStringListModel log_model;
     QStringListModel chatbox[MAXCONTACTS+1];
     std::string tab_index[MAXCONTACTS+1];
+    std::string tmpFileDir;
+    FILE* recvfp;
+    void closeClient();
 };
+
+
+class msgRecver: public QObject, public QRunnable{
+public:
+    msgRecver(int, const typeMsg&, thread_client*);
+    ~msgRecver();
+protected:
+    void run();
+private:
+    thread_client* client;
+    typeMsg msg_;
+    int bytelen;
+};
+
+std::string getFname(const std::string&);
 
 #endif

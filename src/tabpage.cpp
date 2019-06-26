@@ -37,7 +37,7 @@ void TabPage::on_cancel_button_clicked(){
 void TabPage::on_send_button_clicked(){
     std::string msg_content = ui->line_edit_msg->text().toStdString();
     if(msg_content.size() == 0)  return;
-    std::string mssg = uname_dest + std::string(" ") + msg_content;
+    std::string mssg = uname_dest + std::string(" 0 ") + msg_content;
     std::string msg = std::string("I: ") + ui->line_edit_msg->text().toStdString();
     client_->sendMsg(mssg);
     client_->updateChatBox(idx, msg);

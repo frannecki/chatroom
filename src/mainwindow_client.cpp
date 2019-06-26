@@ -2,7 +2,8 @@
 
 MainWindow::MainWindow(int argc, char **argv, QWidget *parent):
     ui(new Ui::MainWindow), 
-    QMainWindow(parent)
+    QMainWindow(parent), 
+    is_client_launched(false)
 {
     ui->setupUi(this);
     setWindowIcon(QIcon(":/images/icon.png"));
@@ -12,6 +13,7 @@ MainWindow::MainWindow(int argc, char **argv, QWidget *parent):
     QObject::connect(&client_, SIGNAL(connection_interrupted()), this, SLOT(on_connection_interrupted()));
     QObject::connect(&client_, SIGNAL(logUpdated()), this, SLOT(updateLoggingView()));
     QObject::connect(&client_, SIGNAL(msgFromNew(int)), this, SLOT(on_msg_from_new(int)));
+    QObject::connect(&client_, SIGNAL(file_open_error()), this, SLOT(on_file_open_error()));
     if(ui->checkbox_remember_settings->isChecked()){
         ReadSettings();
     }
@@ -47,6 +49,7 @@ void MainWindow::on_connect_button_clicked(){
         ui->connect_button->setEnabled(false);
         ui->line_edit_addr->setReadOnly(true);
         ui->line_edit_port->setReadOnly(true);
+        is_client_launched = true;
     }
 }
 
@@ -56,6 +59,7 @@ void MainWindow::on_start_button_clicked(){
     ui->connect_button->setEnabled(true);
     ui->open_new_button->setEnabled(true);
     ui->close_current_button->setEnabled(true);
+    setWindowTitle(tr("Demo Client - ") + ui->combo_box_login->currentText());
 }
 
 void MainWindow::on_close_current_button_clicked(){
@@ -108,6 +112,8 @@ void MainWindow::on_msg_from_new(int cntCont){
     tabpages[cntCont].ui->select_widget->setVisible(false);
     tabpages[cntCont].ui->chat_widget->setVisible(true);
     tabpages[cntCont].ui->chatBox->setModel(client_.chatBox(cntCont));
+    ui->open_new_button->setEnabled(true);
+    ui->close_current_button->setEnabled(true);
 }
 
 void MainWindow::on_contact_cancelled(int idx){
@@ -140,6 +146,16 @@ void MainWindow::on_action_About_triggered(){
         tr("<h2>Chatroom Demo App v0.0</h2><p>&#169; 2019 frannecki</p>"));
 }
 
+void MainWindow::on_file_open_error(){
+    QMessageBox msgBox;
+    msgBox.setText("[ERROR] Cannot open file!");
+    msgBox.exec();
+}
+
+void MainWindow::on_action_Open_triggered(){
+    QString filename = QFileDialog::getOpenFileName(this, tr("Select file"), "./");
+}
+
 void MainWindow::on_action_Quit_triggered(){
     closeExec();
 }
@@ -150,7 +166,7 @@ void MainWindow::on_quit_button_clicked(){
 
 void MainWindow::on_connection_rejected(){
     QMessageBox msgBox;
-    msgBox.setText("[Error] Connection to server is rejeted! You may have logged in.");
+    msgBox.setText("[Error] Connection to server is rejeted! (logged in or limit excceeded.)");
     msgBox.exec();
     closeExec();
 }
@@ -161,6 +177,8 @@ void MainWindow::on_connection_interrupted(){
     msgBox.exec();
     closeExec();
 }
+
+//void MainWindow::on_file_recvd(int contact, std::string fname){}
 
 void MainWindow::showNoServerMessage(){
     QMessageBox msgBox;
@@ -173,8 +191,8 @@ void MainWindow::ReadSettings(){
     QSettings settings("Qt_socket_client", "chatroom_demo");
     restoreGeometry(settings.value("geometry").toByteArray());
     restoreState(settings.value("windowState").toByteArray());
-    QString addr_srv = settings.value("addr_srv",QString("localhost")).toString();
-    QString port_srv = settings.value("port_srv", QString("1234")).toString();
+    QString addr_srv = settings.value("addr_srv",QString("127.0.0.1")).toString();
+    QString port_srv = settings.value("port_srv", QString("11311")).toString();
     ui->line_edit_addr->setText(addr_srv);
     ui->line_edit_port->setText(port_srv);
 }
@@ -188,7 +206,7 @@ void MainWindow::WriteSettings(){
 }
 
 void MainWindow::closeExec(){
-    client_.closeAll();
+    if(is_client_launched)  client_.closeAll();
     close();
 }
 
