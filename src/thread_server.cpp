@@ -36,7 +36,7 @@ bool thread_server::init(const std::string& addr_srv, const std::string& port_sr
 thread_server::~thread_server(){
     printf("[INFO] Waiting for main thread to finish...\n");
     terminate();  // take care of this
-    wait();
+    QThread::wait();
     printf("[INFO] Main thread finished.\n");
     delete mutexRunning;
 }
@@ -236,7 +236,7 @@ msg_forwarder::msg_forwarder(int count, int asender, const typeMsg& _msg, thread
 }
 
 msg_forwarder::~msg_forwarder(){
-    wait();
+    //QRunnable::wait();
 }
 
 void msg_forwarder::run(){

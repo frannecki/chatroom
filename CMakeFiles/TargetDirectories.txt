@@ -1,0 +1,8 @@
+/home/fran/Documents/CXX/chatroom_demo/CMakeFiles/edit_cache.dir
+/home/fran/Documents/CXX/chatroom_demo/CMakeFiles/rebuild_cache.dir
+/home/fran/Documents/CXX/chatroom_demo/CMakeFiles/serverui.dir
+/home/fran/Documents/CXX/chatroom_demo/CMakeFiles/chatroom.dir
+/home/fran/Documents/CXX/chatroom_demo/CMakeFiles/clientui.dir
+/home/fran/Documents/CXX/chatroom_demo/CMakeFiles/serverui_autogen.dir
+/home/fran/Documents/CXX/chatroom_demo/CMakeFiles/chatroom_autogen.dir
+/home/fran/Documents/CXX/chatroom_demo/CMakeFiles/clientui_autogen.dir

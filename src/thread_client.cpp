@@ -41,7 +41,7 @@ bool thread_client::init(const std::string& addr_srv, const std::string& port_sr
 
 thread_client::~thread_client(){
     terminate();
-    wait();
+    QThread::wait();
     delete mutexRunning;
 }
 
