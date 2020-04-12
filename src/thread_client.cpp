@@ -50,12 +50,11 @@ void thread_client::closeAll(){
 }
 
 void thread_client::closeClient(){
-    QMutexLocker locker(mutexRunning);
-    is_Running = false;
-
     std::string exitMsg = std::string("server 4 Request out.");
     while(!sendMsg(exitMsg));
-    close(socket_client);
+    //close(socket_client);
+    QMutexLocker locker(mutexRunning);
+    is_Running = false;
 }
 
 void thread_client::run(){

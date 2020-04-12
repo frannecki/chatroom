@@ -5,7 +5,6 @@
 #include <QPixmap>
 #include <QThread>
 #include <QMutex>
-#include <QThreadPool>
 #include <QRunnable>
 #include <iostream>
 #include <sstream>
@@ -32,7 +31,7 @@ public:
     void run();
     QStringListModel* logModel();
     bool init(const std::string& addr_srv, const std::string& port_addr);
-    void forwardGroupMsg(int cntfd, int sender, const typeMsg&);
+    static void forwardGroupMsg(void*, int sender, const typeMsg&);
 
 signals:
     void logUpdated();
@@ -40,30 +39,16 @@ signals:
 private:
     bool is_Running;
     QMutex *mutexRunning;
-    QThreadPool msg_threadpool;
     struct sockaddr_in addr_server, addr_client;
-	int socket_server, socket_client;
-	fd_set fs;  // file descriptor set
+	int socket_server, socket_client, epfd;
 	int cntfd;  // count of client file descriptors
 	userIDs uIDs[MAXUSERNUM];
     QStringListModel log_model;
     std::map<std::string, int> contacts;
-    std::map<int, std::string> contacts_ind; 
+    std::map<int, int> contacts_ind; 
     void outputLog(const std::string&);
     void loopTask();
     void clrsocket(int);
 };
 
-
-class msg_forwarder: public QObject, public QRunnable{
-public:
-    msg_forwarder(int, int, const typeMsg&, thread_server*);
-    ~msg_forwarder();
-protected:
-    void run();
-private:
-    int cntfd, sender;
-    typeMsg msg_;
-    thread_server *server;
-};
 #endif

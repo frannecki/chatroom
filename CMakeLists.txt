@@ -8,6 +8,7 @@ set(CMAKE_AUTORCC ON)
 set(LIBRARY_OUTPUT_PATH ${CMAKE_CURRENT_SOURCE_DIR}/lib)
 
 find_package(Qt5  REQUIRED COMPONENTS  Widgets Core Gui Qml Quick)
+find_package(Threads)
 
 if(Qt5_FOUND)
   file(GLOB QT_FORMS RELATIVE ${CMAKE_CURRENT_SOURCE_DIR} src/*.ui)
@@ -29,5 +30,5 @@ if(Qt5_FOUND)
   target_link_libraries(clientui ${PROJECT_NAME})
 
   add_executable(serverui src/main_server.cpp ${QT_RESOURCES} ${QT_MOC})
-  target_link_libraries(serverui ${PROJECT_NAME})
+  target_link_libraries(serverui ${PROJECT_NAME} ${CMAKE_THREAD_LIBS_INIT})
 endif()
