@@ -1,9 +1,5 @@
-#ifndef COMMON_H_
-#define COMMON_H_
-#define MAXBUFFLEN 500
-#define MAXFNAMELEN 100
-#define MAXNAMELEN 20
-#define MAXUSERNUM 10
+#ifndef UTILS_H
+#define UTILS_H
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/epoll.h>
@@ -15,12 +11,23 @@
 #include <string>
 #include <string.h>
 
+const int MAXBUFFLEN = 500;
+const int MAXFNAMELEN = 100;
+const int MAXNAMELEN = 20;
+const int MAXUSERNUM = 10;
+
 enum typeStream {
     MESSAGE = 0, 
-    FILENAME = 1, 
-    FILEBUFF = 2, 
-    SERVER_FEEDBACK = 3, 
-    CLIENT_LOGOUT = 4
+    FILENAME,
+    FILEBUFF, 
+    SERVER_FEEDBACK,
+    SERVER_QUERY,
+    CLIENT_LOGOUT,
+    CLIENT_REGISTER,
+    CLIENT_LOGIN,
+    USER_SEARCH,
+    USER_SELECTION,
+    SERVER_STOP
 };
 
 struct userIDs{
@@ -45,4 +52,9 @@ void parseRMsg(char buff[], typeMsg &msg_);
 void parseSMsg(char buff[], typeMsg &msg_);
 
 void composeMsg(char buff[], const std::string& , int, const char*);
+
+void getServerIp();
+
+bool isUsernameOrPasswordValid(const std::string&);
+
 #endif

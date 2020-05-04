@@ -4,14 +4,14 @@
 #include <QMainWindow>
 #include <QStringListModel>
 #include <QPixmap>
-#include <QThread>
-#include <QMutex>
+#include <QObject>
 #include <QThreadPool>
 #include <QRunnable>
 #include <iostream>
 #include <sstream>
 #include <string.h>
-namespace socket_{
+#include <boost/thread.hpp>
+#include <boost/thread/locks.hpp>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -19,26 +19,27 @@ namespace socket_{
 #include <stdlib.h>
 #include <unistd.h>
 #include <netdb.h>
-}
 #include <map>
 #include <string>
+#include <assert.h>
 
-#include "common_.h"
-using namespace socket_;
+#include "utils.h"
 
-class thread_client: public QThread{
+class thread_client: public QObject{
     Q_OBJECT
+    
 public:
     explicit thread_client();
     ~thread_client();
     void closeAll();
-    void run();
-    bool init(const std::string& addr_srv, const std::string& port_addr);
+    static void loop(void*);
+    bool init(const std::string&, const std::string&, int);
     bool sendMsg(const std::string&);
     void recvMsg(int, const typeMsg&);
     QStringListModel* chatBox(int);
     QStringListModel* logModel();
     void setNickname(const std::string&);
+    void setPassword(const std::string&);
     std::string getNickname() const;
     std::map<std::string, int>* getContacts();
     void updateChatBox(int, const std::string&);
@@ -52,13 +53,19 @@ signals:
     void fileRecvd(int, std::string);
     void logUpdated();
     void msgFromNew(int);
+    void connection_established();
     void connection_rejected();
     void connection_interrupted();
+    void registration_succeeded();
+    void registration_failed();
+    void login_failed();
     void file_open_error();
+    void users_found(const char*);
 
 private:
-    QMutex *mutexRunning;
-    QMutex *mutexRecvFile;
+    boost::thread workerThread;
+    boost::shared_mutex mutexRunning;
+    boost::shared_mutex mutexRecvFile;
     QThreadPool thread_pool;
     bool is_Running;
     bool is_Receiving_File;
@@ -66,7 +73,7 @@ private:
     struct sockaddr_in dest;
     int cntcont;  // number of contacts (<= MAXCONTACTS).
     void outputLog(const std::string&);
-    std::string nickname;
+    std::string nickname, password;
     std::string fname, fileSrc;
     std::map<std::string, int> contacts;
     QStringListModel log_model;

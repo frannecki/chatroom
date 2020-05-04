@@ -25,13 +25,9 @@ public:
     int idx;
 
 signals:
-    void contact_selected(int);
-    void contact_cancelled(int);
 
 public slots:
     void on_send_button_clicked();
-    void on_ok_button_clicked();
-    void on_cancel_button_clicked();
 };
 
 #endif

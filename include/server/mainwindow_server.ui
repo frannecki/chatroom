@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <ui version="4.0">
- <class>MainWindow</class>
- <widget class="QMainWindow" name="MainWindow">
+ <class>MainWindow_</class>
+ <widget class="QMainWindow" name="MainWindow_">
   <property name="geometry">
    <rect>
     <x>0</x>
@@ -11,7 +11,7 @@
    </rect>
   </property>
   <property name="windowTitle">
-   <string>Demo Client</string>
+   <string>Demo Server</string>
   </property>
   <property name="windowIcon">
    <iconset resource="../resources/images.qrc">
@@ -36,19 +36,29 @@
       <property name="currentIndex">
        <number>0</number>
       </property>
-      <widget class="QWidget" name="tab">
+      <widget class="QWidget" name="tab_2">
        <attribute name="title">
         <string>view_logging</string>
        </attribute>
-       <layout class="QGridLayout" name="gridLayout_3">
-        <item row="0" column="0">
-         <widget class="QGroupBox" name="group_box_logging">
+       <layout class="QVBoxLayout" name="verticalLayout_6">
+        <item>
+         <widget class="QGroupBox" name="groupBox_image_2">
           <property name="title">
            <string>logging</string>
           </property>
-          <layout class="QGridLayout" name="gridLayout_6">
-           <item row="0" column="0">
-            <widget class="QListView" name="list_view_logging"/>
+          <layout class="QGridLayout" name="gridLayout_2">
+           <item row="4" column="0" rowspan="3" colspan="2">
+            <widget class="QListView" name="logView">
+             <property name="enabled">
+              <bool>true</bool>
+             </property>
+             <property name="sizePolicy">
+              <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
+               <horstretch>0</horstretch>
+               <verstretch>0</verstretch>
+              </sizepolicy>
+             </property>
+            </widget>
            </item>
           </layout>
          </widget>
@@ -65,13 +75,14 @@
      <x>0</x>
      <y>0</y>
      <width>873</width>
-     <height>36</height>
+     <height>26</height>
     </rect>
    </property>
    <widget class="QMenu" name="menu_File">
     <property name="title">
      <string>&amp;Help</string>
     </property>
+    <addaction name="action_Preferences"/>
     <addaction name="separator"/>
     <addaction name="action_About"/>
     <addaction name="separator"/>
@@ -80,7 +91,7 @@
     <property name="title">
      <string>&amp;File</string>
     </property>
-    <addaction name="action_Open"/>
+    <addaction name="actionOpen"/>
     <addaction name="action_Quit"/>
    </widget>
    <addaction name="menuDemo_App"/>
@@ -97,7 +108,7 @@
    <property name="minimumSize">
     <size>
      <width>480</width>
-     <height>693</height>
+     <height>680</height>
     </size>
    </property>
    <property name="allowedAreas">
@@ -127,92 +138,7 @@
        </property>
        <layout class="QVBoxLayout" name="verticalLayout_3">
         <item>
-         <widget class="QGroupBox" name="group_box_user">
-          <property name="title">
-           <string>User</string>
-          </property>
-          <layout class="QGridLayout" name="gridLayout_5" rowstretch="0,0,0,0,0">
-           <item row="1" column="1">
-            <widget class="QComboBox" name="combo_box_login">
-             <item>
-              <property name="text">
-               <string>Johnny</string>
-              </property>
-             </item>
-             <item>
-              <property name="text">
-               <string>Kimberly</string>
-              </property>
-             </item>
-             <item>
-              <property name="text">
-               <string>David</string>
-              </property>
-             </item>
-             <item>
-              <property name="text">
-               <string>Alice</string>
-              </property>
-             </item>
-             <item>
-              <property name="text">
-               <string>Sally</string>
-              </property>
-             </item>
-             <item>
-              <property name="text">
-               <string>Wolfgang</string>
-              </property>
-             </item>
-            </widget>
-           </item>
-           <item row="1" column="0">
-            <widget class="QLabel" name="nickname">
-             <property name="enabled">
-              <bool>true</bool>
-             </property>
-             <property name="frameShape">
-              <enum>QFrame::StyledPanel</enum>
-             </property>
-             <property name="frameShadow">
-              <enum>QFrame::Raised</enum>
-             </property>
-             <property name="text">
-              <string>Nickname</string>
-             </property>
-            </widget>
-           </item>
-           <item row="4" column="0">
-            <spacer name="horizontalSpacer_2">
-             <property name="orientation">
-              <enum>Qt::Horizontal</enum>
-             </property>
-             <property name="sizeHint" stdset="0">
-              <size>
-               <width>40</width>
-               <height>20</height>
-              </size>
-             </property>
-            </spacer>
-           </item>
-           <item row="4" column="1">
-            <widget class="QPushButton" name="start_button">
-             <property name="sizePolicy">
-              <sizepolicy hsizetype="MinimumExpanding" vsizetype="Fixed">
-               <horstretch>0</horstretch>
-               <verstretch>0</verstretch>
-              </sizepolicy>
-             </property>
-             <property name="text">
-              <string>Start</string>
-             </property>
-            </widget>
-           </item>
-          </layout>
-         </widget>
-        </item>
-        <item>
-         <widget class="QGroupBox" name="group_box_server">
+         <widget class="QGroupBox" name="groupBox">
           <property name="title">
            <string>Server</string>
           </property>
@@ -242,7 +168,7 @@
               </sizepolicy>
              </property>
              <property name="toolTip">
-              <string>Set the target to the current joint trajectory state.</string>
+              <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Bind a new socket to specified ip and port.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
              </property>
              <property name="statusTip">
               <string>Clear all waypoints and set the target to the current joint trajectory state.</string>
@@ -277,6 +203,9 @@
            </item>
            <item row="3" column="0" colspan="2">
             <widget class="QLineEdit" name="line_edit_port">
+             <property name="enabled">
+              <bool>false</bool>
+             </property>
              <property name="text">
               <string>11311</string>
              </property>
@@ -284,6 +213,9 @@
            </item>
            <item row="1" column="0" colspan="2">
             <widget class="QLineEdit" name="line_edit_addr">
+             <property name="enabled">
+              <bool>false</bool>
+             </property>
              <property name="text">
               <string>127.0.0.2</string>
              </property>
@@ -299,29 +231,6 @@
              </property>
              <property name="text">
               <string>IP Address</string>
-             </property>
-            </widget>
-           </item>
-          </layout>
-         </widget>
-        </item>
-        <item>
-         <widget class="QGroupBox" name="group_box_chatorder">
-          <property name="title">
-           <string>Chat</string>
-          </property>
-          <layout class="QGridLayout" name="gridLayout_2">
-           <item row="0" column="1">
-            <widget class="QPushButton" name="close_current_button">
-             <property name="text">
-              <string>Close Tab</string>
-             </property>
-            </widget>
-           </item>
-           <item row="0" column="0">
-            <widget class="QPushButton" name="open_new_button">
-             <property name="text">
-              <string>New Tab</string>
              </property>
             </widget>
            </item>
@@ -381,12 +290,9 @@
     <string>&amp;About</string>
    </property>
   </action>
-  <action name="action_Open">
+  <action name="actionOpen">
    <property name="text">
     <string>&amp;Open</string>
-   </property>
-   <property name="shortcut">
-    <string>Ctrl+O</string>
    </property>
   </action>
   <action name="actionClose">

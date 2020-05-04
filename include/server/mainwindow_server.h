@@ -5,6 +5,8 @@
 #include <QCloseEvent>
 #include <QSettings>
 #include <QMessageBox>
+#include <QPixmap>
+#include <QPalette>
 
 #include "thread_server.h"
 
@@ -35,7 +37,6 @@ private slots:
 private:
     Ui::MainWindow_ *ui;
     thread_server server_;
-    void closeExec();
 };
 
 #endif // MAINWINDOW_SERVER_H

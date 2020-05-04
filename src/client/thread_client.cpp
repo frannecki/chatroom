@@ -1,10 +1,17 @@
-#include "thread_client.h"
+#include "client/thread_client.h"
 
-thread_client::thread_client(){}
+thread_client::thread_client(){
+    ;
+}
 
-bool thread_client::init(const std::string& addr_srv, const std::string& port_srv){
-    
-    mutexRunning = new QMutex();
+thread_client::~thread_client(){
+    printf("[INFO] Main Thread finished.\n");
+}
+
+bool thread_client::init(const std::string& addr_srv, 
+    const std::string& port_srv, int request_code)
+{    
+    assert(request_code == CLIENT_LOGIN || request_code == CLIENT_REGISTER);
     is_Running = true;
     is_Receiving_File = false;
     cntcont = 0;
@@ -24,25 +31,19 @@ bool thread_client::init(const std::string& addr_srv, const std::string& port_sr
     dest.sin_port = htons(port);
     inet_aton(addr_srv.c_str(), &dest.sin_addr);
     bzero(&(dest.sin_zero), sizeof(dest.sin_zero) / sizeof(dest.sin_zero[0]));
-    if(socket_::connect(socket_client, (struct sockaddr*)&dest, sizeof(dest)) < 0){
+    if(::connect(socket_client, (struct sockaddr*)&dest, sizeof(dest)) < 0){
         return false;
     }
-    outputLog(std::string("[INFO] Server connected. Socket: ") + std::to_string(socket_client));
-    if(!sendMsg(nickname)){
-        outputLog(std::string("[ERROR] send() nickname failed."));
+    outputLog("[INFO] Server connected. Socket: " + std::to_string(socket_client));
+    if(!sendMsg(nickname + " " + std::to_string(request_code) + " " + password)){
+        outputLog("[ERROR] send() nickname and password failed.");
         return false;
     }
     else{
-        outputLog(std::string("[INFO] send() nickname succeeded."));
+        outputLog("[INFO] send() nickname and password succeeded.");
     }
-    start();
+    workerThread = boost::thread(thread_client::loop, (void*)this);
     return true;
-}
-
-thread_client::~thread_client(){
-    terminate();
-    QThread::wait();
-    delete mutexRunning;
 }
 
 void thread_client::closeAll(){
@@ -50,37 +51,46 @@ void thread_client::closeAll(){
 }
 
 void thread_client::closeClient(){
-    std::string exitMsg = std::string("server 4 Request out.");
-    while(!sendMsg(exitMsg));
-    //close(socket_client);
-    QMutexLocker locker(mutexRunning);
-    is_Running = false;
+    {
+        boost::unique_lock<boost::shared_mutex>(mutexRunning);
+        if(!is_Running)  return;  
+        is_Running = false;
+    }
+    std::string exitMsg = "server " + std::to_string(CLIENT_LOGOUT) + " Request out";
+    sendMsg(exitMsg);  // request to logout
+    workerThread.join();
+    printf("[INFO] Thread finished.\n");
+    close(socket_client);
 }
 
-void thread_client::run(){
+void thread_client::loop(void* params){
+    thread_client* th = (thread_client*)params;
     char buff[MAXBUFFLEN];
     bzero(buff, MAXBUFFLEN);
     typeMsg msg_;
     int bytelen;
-    bool isNodeRunning;
     int contact_tab_index;
-    while(true){
+    while(1){
         bzero(buff, strlen(buff));
-        bytelen = recv(socket_client, buff, MAXBUFFLEN, 0);
-        if(bytelen == 0)  continue;
-        else if(bytelen < 0){
-            emit connection_interrupted();
+        bytelen = recv(th->socket_client, buff, MAXBUFFLEN, 0);
+        if(bytelen < 0){
+            //caused by broken pipe
+            //perror("[ERROR] recv(): ");
+            emit th->connection_interrupted();
+            break;
+        }
+        else if(bytelen == 0){
+            // server socket closed.
+            // caused by register finished or logout accepted
             break;
         }
         parseRMsg(buff, msg_);
-        //recvMsg(bytelen, msg_);
-        thread_pool.start(new msgRecver(bytelen, msg_, this));
+        th->thread_pool.start(new msgRecver(bytelen, msg_, th));
         {
-            QMutexLocker locker(mutexRunning);
-            isNodeRunning = is_Running;
-        }
-        if(!isNodeRunning){
-            break;
+            boost::shared_lock<boost::shared_mutex>(th->mutexRunning);
+            if(!th->is_Running){
+                break;
+            }
         }
     }
 }
@@ -89,14 +99,37 @@ void thread_client::recvMsg(int bytelen, const typeMsg& msg_){
     if(msg_.btype == SERVER_FEEDBACK){
         if(0 == strcmp("Connection Established.", msg_.msg)){
             outputLog(std::string("[INFO] Connection to server Established. Socket: ") + std::to_string(socket_client));
+            emit connection_established();
+            return;
         }
         else{
-            QMutexLocker locker(mutexRunning);
-            is_Running = false;
-            emit connection_rejected();
+            if(0 == strcmp("Registration Succeeded.", msg_.msg)){
+                outputLog("[INFO] Registration Succeeded.");
+                emit registration_succeeded();
+            }
+            else if(0 == strcmp("Registration Failed.", msg_.msg)){
+                outputLog("[ERROR] Registration Failed!");
+            }
+            else if(0 == strcmp("Login Failed.", msg_.msg)){
+                outputLog("[ERROR] Login Failed!");
+                emit login_failed();
+            }
+            else if(0 == strcmp("Connection Rejected!", msg_.msg)){
+                emit connection_rejected();
+            }
+            bool isNodeRunning;
+            {
+                boost::shared_lock<boost::shared_mutex> locker(mutexRunning);
+                isNodeRunning = is_Running;
+            }
+            if(isNodeRunning)  closeAll();
         }
     }
-
+    else if(msg_.btype == SERVER_QUERY){
+        if(0 != strcmp("Not Found.", msg_.msg)){
+            emit users_found(msg_.msg);
+        }
+    }
     else{
         bool newCont = false;
         if(contacts.count(std::string(msg_.sock_src)) == 0){
@@ -186,6 +219,10 @@ void thread_client::setNickname(const std::string& nn){
     nickname = nn;
 }
 
+void thread_client::setPassword(const std::string& pw){
+    password = pw;
+}
+
 std::string thread_client::getNickname() const{
     return nickname;
 }
@@ -202,7 +239,7 @@ int thread_client::addContact(const std::string &srcname){
     else{
         contacts.insert(std::pair<std::string, int>(srcname, ++cntcont));
         tab_index[cntcont] = srcname;
-        outputLog(std::string("[INFO] Added new contact #") + std::to_string(cntcont) + srcname);
+        outputLog("[INFO] Added new contact #" + std::to_string(cntcont) + srcname);
         return cntcont;
     }
 }
