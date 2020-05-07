@@ -12,13 +12,18 @@
 #include <string.h>
 #include <boost/thread.hpp>
 #include <boost/thread/locks.hpp>
+
+#include <fcntl.h>
+#include <sys/sendfile.h>
+#include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
+#include <netinet/tcp.h>
 #include <arpa/inet.h>
 #include <stdlib.h>
 #include <unistd.h>
-#include <netdb.h>
+
 #include <map>
 #include <string>
 #include <assert.h>
@@ -32,10 +37,10 @@ public:
     explicit thread_client();
     ~thread_client();
     void closeAll();
-    static void loop(void*);
     bool init(const std::string&, const std::string&, int);
-    bool sendMsg(const std::string&);
+    bool sendMsg(const std::string&, bool use_socket_file = false);
     void recvMsg(int, const typeMsg&);
+    void transferFile(const std::string&, const std::string&);
     QStringListModel* chatBox(int);
     QStringListModel* logModel();
     void setNickname(const std::string&);
@@ -47,6 +52,9 @@ public:
     int removeContact(int);
     int getCntCont() const;
     std::string getContName(int);
+    static void loop(void*);
+    static void transfer_file(void*, std::string, std::string);
+    static void recv_file(void*, std::string, std::string, int);
 
 signals:
     void msgRecvd(int);
@@ -60,20 +68,24 @@ signals:
     void registration_failed();
     void login_failed();
     void file_open_error();
+    void file_recv_finished(const char*);
     void users_found(const char*);
 
 private:
     boost::thread workerThread;
+    boost::thread sendFileThread;
+    boost::thread recvFileThread;
     boost::shared_mutex mutexRunning;
-    boost::shared_mutex mutexRecvFile;
+    boost::mutex mutexRecvFile;
+    boost::mutex mutexSendFile;
     QThreadPool thread_pool;
-    bool is_Running;
-    bool is_Receiving_File;
-    int socket_client;
+    bool is_Running, is_RecvFile;
+    int socket_client, socket_file;
     struct sockaddr_in dest;
     int cntcont;  // number of contacts (<= MAXCONTACTS).
     void outputLog(const std::string&);
     std::string nickname, password;
+    std::string toRecvFilename, toRecvFileSrc;
     std::string fname, fileSrc;
     std::map<std::string, int> contacts;
     QStringListModel log_model;
@@ -81,6 +93,11 @@ private:
     std::string tab_index[MAXCONTACTS+1];
     std::string tmpFileDir;
     FILE* recvfp;
+    
+    // for non blocking file recv
+    fd_set fs;
+    struct timeval tv;
+
     void closeClient();
 };
 

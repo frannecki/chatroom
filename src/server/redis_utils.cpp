@@ -1,3 +1,4 @@
+#ifdef MSGCACHE
 #include "server/redis_utils.h"
 
 redis_spec::~redis_spec(){
@@ -31,3 +32,4 @@ const char* redis_spec::retrieveMsg(){
     reply = (redisReply*)redisCommand(conn, "LPOP %s", current_username);
     return reply->str;
 }
+#endif

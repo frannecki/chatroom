@@ -61,8 +61,10 @@ if(Qt5_FOUND)
                           mysqlclient  
                           ${PROJECT_NAME}  
                           ${PROJECT_NAME}_server_form
-                          hiredis
                          )
+    if(USE_REDIS_CACHE)
+      target_link_libraries(${PROJECT_NAME}_server hiredis)
+    endif()
     add_executable(serverui  src/main_server.cpp)
     target_link_libraries(serverui  ${PROJECT_NAME}_server)
   endif()

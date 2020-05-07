@@ -33,6 +33,8 @@ bool thread_server::init(const std::string& addr_srv, const std::string& port_sr
         outputLog(std::string("[ERROR] Opening socket."));
         return false;
     }
+    int optval = 1;
+    setsockopt(socket_server, SOL_SOCKET, SO_REUSEPORT, &optval, sizeof(int));
     int port;
     sscanf(port_srv.c_str(), "%d", &port);
     addr_server.sin_family = AF_INET;
@@ -86,6 +88,7 @@ void thread_server::closeAll(){
     workerThread.join();
     for(int i = 0; i < cntfd; ++i){
         close(uIDs[i].sockfd);
+        close(uIDs[i].sockfd_file);
     }
     close(socket_stopper);
     close(socket_stopper_client);
@@ -116,13 +119,14 @@ void thread_server::loopTask(void* param){
     std::string str;
     int recvLen;
     char buff[MAXBUFFLEN];
+    char filebuff[MAXFILEBUFFLEN];
     bzero(buff, MAXBUFFLEN);
     typeMsg msg_;
     int maxsock = std::max(th->socket_server, th->socket_stopper);
     
     ThreadPool msg_threadpool(20);
 
-    epoll_event ev, events[MAXUSERNUM+2], ev_stopper;
+    epoll_event ev, events[2*MAXUSERNUM+2], ev_stopper;
     th->epfd = epoll_create1(0);
     if(th->epfd == -1){
         perror("[ERROR] epoll_create1()");
@@ -169,14 +173,29 @@ void thread_server::loopTask(void* param){
                         close(th->socket_client);
                     }
                     else if(recvLen == 0){
-                        th->outputLog(std::string("[ERROR] Invalid username! Closing client..."));
+                        th->outputLog(std::string("[ERROR] Socket closed at client's side! Closing client..."));
                         close(th->socket_client);
                     }
                     else{
                         char username[15], password[20], tmpbuf[15];
                         int request_code = 0;
                         sscanf(buff, "%s %d %s", username, &request_code, password);
-                        if(th->contacts.count(std::string(username)) > 0){
+                        if(request_code == CLIENT_FILE_SOCKET){
+                            if(th->contacts.count(std::string(username)) > 0){
+                                int id = th->contacts[std::string(username)];
+                                th->uIDs[id].sockfd_file = th->socket_client;
+                                th->uIDs[id].ev_file.events = EPOLLIN;
+                                th->uIDs[id].ev_file.data.fd = th->socket_client;
+                                epoll_ctl(th->epfd, EPOLL_CTL_ADD, th->socket_client, &(th->uIDs[id].ev_file));
+                                th->contacts_file.insert(std::pair<int, int>
+                                    (th->uIDs[id].sockfd_file, th->uIDs[id].sockfd));
+                                printf("[INFO] client file socket for %s is %d.\n", username, th->socket_client);
+                            }
+                            else{
+                                close(th->socket_client);
+                            }
+                        }
+                        else if(th->contacts.count(std::string(username)) > 0){
                             th->outputLog(std::string("[ERROR] Clients with the same username! Closing client..."));
                             composeMsg(buff, "server", SERVER_FEEDBACK, "Connection Rejected!");
                             if(send(th->socket_client, buff, strlen(buff), 0) >= 0){
@@ -249,18 +268,19 @@ void thread_server::loopTask(void* param){
                     }
                 }
                 else{
-                    th->outputLog(std::string("[ERROR] Exceeded the maximum connections!"));
-                    composeMsg(buff, std::string("server"), SERVER_FEEDBACK, "Connection Rejected!");
+                    th->outputLog("[ERROR] Exceeded the maximum connections!");
+                    composeMsg(buff, "server", SERVER_FEEDBACK, "Connection Rejected!");
                     if(send(th->socket_client, buff, strlen(buff), 0) >= 0){
-                        th->outputLog(std::string("[INFO] Rejection issued"));
+                        th->outputLog("[INFO] Rejection issued");
                     }
-                    else  th->outputLog(std::string("[ERROR] Rejection not issued"));
+                    else  th->outputLog("[ERROR] Rejection not issued");
                 }
             }
+
             else if(th->contacts_ind.count(evfd) > 0){
                 int i = th->contacts_ind[evfd];
                 bzero(buff, strlen(buff));
-                recvLen = recv(th->uIDs[i].sockfd, buff, MAXBUFFLEN, 0);
+                recvLen = recv(evfd, buff, MAXBUFFLEN, 0);
                 if(recvLen < 0){
                     th->outputLog(std::string("[Error] recv() failed!"));
                     th->clrsocket(i);
@@ -292,22 +312,46 @@ void thread_server::loopTask(void* param){
                             }
                         }
                         composeMsg(buff, "server", SERVER_QUERY, users);
-                        printf("[INFO] Back to %s\n", th->uIDs[i].uname.c_str());
                         send(th->uIDs[i].sockfd, buff, strlen(buff), 0);
                     }
                     else if(msg_.btype == USER_SELECTION){
                         //TODO;
                     }
-                    else  msg_threadpool.getTask(forwardGroupMsg, (void*)th, i, msg_);
+                    /*
+                    else if(msg_.btype == FILEEND){
+                        int flag = 1;
+                        setsockopt(th->uIDs[i].sockfd_file_dest, IPPROTO_TCP, TCP_NODELAY, 
+                            (char*)&flag, sizeof(int));
+                    }*/
+                    else{
+                        if(msg_.btype == FILENAME){
+                            std::string file_dest(msg_.sock_dest);
+                            if(th->contacts.count(file_dest)){
+                                th->uIDs[i].sockfd_file_dest = th->uIDs[th->contacts[file_dest]].sockfd_file;
+                            }
+                        }
+                        msg_threadpool.getTask(forwardGroupMsg, (void*)th, i, msg_);
+                    }
                 }
+            }
+
+            else if(th->contacts_file.count(evfd) > 0 && th->contacts_ind.count(th->contacts_file[evfd]) > 0)
+            {
+                int flen = recv(evfd, filebuff, MAXFILEBUFFLEN, 0);
+                if(flen <= 0)  continue;
+                int i = th->contacts_ind[th->contacts_file[evfd]];
+                if(send(th->uIDs[i].sockfd_file_dest, filebuff, flen, 0) <= 0){
+                    perror("[ERROR] transfer file");
+                }
+                //printf("[FILE] transfered file buffer of size %d to %d\n", flen, th->uIDs[i].sockfd_file_dest);
             }
         }
         if(threadStopping)  break;
     }
 }
 
-void thread_server::forwardGroupMsg(void* ptr, int sender,
-                             const typeMsg &msg_){
+void thread_server::forwardGroupMsg(void* ptr, int sender, const typeMsg &msg_)
+{
     
     thread_server *ts = (thread_server*)ptr;
     boost::shared_lock<boost::shared_mutex> locker(ts->mutexUIds);
@@ -322,7 +366,7 @@ void thread_server::forwardGroupMsg(void* ptr, int sender,
         }
     }
     else{
-        if(ts->contacts.count(std::string(msg_.sock_dest)) == 0){
+        if(msg_.btype == MESSAGE && ts->contacts.count(std::string(msg_.sock_dest)) == 0){
 #ifdef MSGCACHE
             unsigned int result_code = ts->sql_task.queryUser(msg_.sock_dest, false);
             if(USER_VALID == result_code){
@@ -346,21 +390,26 @@ void thread_server::forwardGroupMsg(void* ptr, int sender,
 
 void thread_server::clrsocket(int idx){
     if(idx < 0  ||  idx >= cntfd)  return;
-    close(uIDs[idx].sockfd);    
+    close(uIDs[idx].sockfd);
+    close(uIDs[idx].sockfd_file); 
     outputLog(std::string("[INFO] Removing client ") + uIDs[idx].uname);
     {
         boost::unique_lock<boost::shared_mutex> locker(mutexUIds);
     contacts_ind.erase(uIDs[idx].sockfd);
     contacts.erase(uIDs[idx].uname);
+    contacts_file.erase(uIDs[idx].sockfd_file);
     epoll_ctl(epfd, EPOLL_CTL_DEL, uIDs[idx].sockfd, &(uIDs[idx].ev));
-    epoll_ctl(epfd, EPOLL_CTL_DEL, uIDs[cntfd-1].sockfd, &(uIDs[cntfd-1].ev));
+    //epoll_ctl(epfd, EPOLL_CTL_DEL, uIDs[cntfd-1].sockfd, &(uIDs[cntfd-1].ev));
+    epoll_ctl(epfd, EPOLL_CTL_DEL, uIDs[idx].sockfd_file, &(uIDs[idx].ev_file));
+    //epoll_ctl(epfd, EPOLL_CTL_DEL, uIDs[cntfd-1].sockfd_file, &(uIDs[cntfd-1].ev_file));
     uIDs[idx] = uIDs[--cntfd];
     if(cntfd > idx){
         contacts[uIDs[idx].uname] = idx;
         contacts_ind[uIDs[idx].sockfd] = idx;
     }
     }
-    epoll_ctl(epfd, EPOLL_CTL_ADD, uIDs[idx].sockfd, &(uIDs[idx].ev));
+    //epoll_ctl(epfd, EPOLL_CTL_ADD, uIDs[idx].sockfd, &(uIDs[idx].ev));
+    //epoll_ctl(epfd, EPOLL_CTL_ADD, uIDs[idx].sockfd_file, &(uIDs[idx].ev_file));
     uIDs[cntfd].reset();
 }
 
