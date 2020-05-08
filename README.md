@@ -18,9 +18,10 @@ Some variables need to be adapted, such as mysql login info, server listened add
   Run the following command lines to build the executables
   ```sh
   cmake \
-  -DBUILD_CLIENT=ON \    # client application to be built
-  -DBUILD_SERVER=ON \    # server application to be built
-  -DUSE_REDIS_CACHE=ON   # use redis to cache messages for offline users
+  -DCMAKE_BUILD_TYPE=Release\  # set release configuration
+  -DBUILD_CLIENT=ON \          # client application to be built
+  -DBUILD_SERVER=ON \          # server application to be built
+  -DUSE_REDIS_CACHE=ON         # use redis to cache messages for offline users
   .
   
   make                   # build libraries and excutables

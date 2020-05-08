@@ -18,7 +18,7 @@ const int MAXNAMELEN = 20;
 const int MAXUSERNUM = 10;
 const int MAXFILEBUFFLEN = 2048;
 
-enum typeStream {
+enum bTypeMsg {
     MESSAGE = 0, 
     FILENAME,
     FILEEND,
@@ -40,26 +40,21 @@ struct userIDs{
     int sockfd, sockfd_file;
     epoll_event ev;
     epoll_event ev_file;
-    userIDs(): uname(std::string("unknown")), sockfd(0){};
+    userIDs(): uname(std::string("unknown")), sockfd(0), sockfd_file_dest(-1){};
     void reset(){
         uname = std::string("unknown");
         sockfd = sockfd_file = -1;
     }
 };
 
-struct typeMsg{
-    char msg[MAXFILEBUFFLEN];
+struct usermsg{
     int btype;
-    char sock_dest[MAXNAMELEN], sock_src[MAXNAMELEN];
+    char sock_dest[MAXNAMELEN];
+    char sock_src[MAXNAMELEN];
+    char msg[MAXBUFFLEN];
 };
 
-void parseRMsg(char buff[], typeMsg &msg_);
-
-void parseSMsg(char buff[], typeMsg &msg_);
-
-void composeMsg(char buff[], const std::string& , int, const char*);
-
-void getServerIp();
+void composeMsg(usermsg&, const char* , int, const char*);
 
 bool isUsernameOrPasswordValid(const std::string&);
 

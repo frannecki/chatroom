@@ -18,16 +18,8 @@ bool thread_client::init(const std::string& addr_srv,
     is_RecvFile = false;
     cntcont = 0;
     thread_pool.setMaxThreadCount(20);
-    
-    tmpFileDir = ".TEMP_" + nickname + "/";
-    std::string mkdirTempFolder = "mkdir " + tmpFileDir;
-    system(mkdirTempFolder.c_str());
 
     if((socket_client = socket(AF_INET, SOCK_STREAM, 0)) < 0){
-        emit connection_interrupted();
-        return false;
-    }
-    if(request_code == CLIENT_LOGIN && (socket_file = socket(AF_INET, SOCK_STREAM, 0)) < 0){
         emit connection_interrupted();
         return false;
     }
@@ -41,33 +33,47 @@ bool thread_client::init(const std::string& addr_srv,
         return false;
     }
     outputLog("[INFO] Server connected. Socket: " + std::to_string(socket_client));
-    if(!sendMsg(nickname + " " + std::to_string(request_code) + " " + password)){
-        outputLog("[ERROR] send() nickname and password failed.");
+    if(!sendMsg(request_code, "\0", nickname + " " + password)){
         return false;
     }
+
+    struct usermsg msg_recved;
+    bzero(msg_recved.msg, MAXBUFFLEN+1);
+    recv(socket_client, (char*)&msg_recved, sizeof(msg_recved), 0);
+    if(msg_recved.btype == SERVER_FEEDBACK && 0 == 
+        strcmp(msg_recved.msg, "Connection Established."))
+    {
+        outputLog(std::string("[INFO] Connection to server Established. Socket: ") + std::to_string(socket_client));
+        emit connection_established();
+    }
     else{
-        outputLog("[INFO] send() nickname and password succeeded.");
+        return false;
     }
 
     if(request_code == CLIENT_LOGIN){
+        if((socket_file = socket(AF_INET, SOCK_STREAM, 0)) < 0){
+            emit connection_interrupted();
+            return false;;
+        }
         if(::connect(socket_file, (struct sockaddr*)&dest, sizeof(dest)) < 0){
             return false;
         }
         outputLog("[INFO] Server file transfer connected. Socket: " + std::to_string(socket_file));
-        if(!sendMsg(nickname + " " + std::to_string(CLIENT_FILE_SOCKET) + " " + password, true)){
+        if(!sendMsg(CLIENT_FILE_SOCKET, "\0", nickname + " " + password, true)){
             return false;
         }
+        flushFileSocket();
     }
 
     workerThread = boost::thread(thread_client::loop, (void*)this);
+    tmpFileDir = ".TEMP_" + nickname + "/";
+    std::string mkdirTempFolder = "mkdir " + tmpFileDir;
+    system(mkdirTempFolder.c_str());
     return true;
 }
 
 void thread_client::closeAll(){
-    closeClient();
-}
-
-void thread_client::closeClient(){
+    printf("[INFO] Ready to close client.\n");
     {
         boost::unique_lock<boost::shared_mutex> locker(mutexRunning);
         if(!is_Running)  return;  
@@ -76,36 +82,29 @@ void thread_client::closeClient(){
     {
         boost::unique_lock<boost::mutex> locker(mutexRecvFile);
     }
-    std::string exitMsg = "server " + std::to_string(CLIENT_LOGOUT) + " Request out";
-    sendMsg(exitMsg);  // request to logout
+    sendMsg(CLIENT_LOGOUT, "server", "\0");  // request to logout
     workerThread.join();
-    printf("[INFO] Thread finished.\n");
+    printf("[INFO] Recv thread finished.\n");
     close(socket_client);
 }
 
 void thread_client::loop(void* params){
     thread_client* th = (thread_client*)params;
-    char buff[MAXBUFFLEN];
-    bzero(buff, MAXBUFFLEN);
-    typeMsg msg_;
+    usermsg msg_recved;
     int bytelen;
     int contact_tab_index;
     while(1){
-        bzero(buff, strlen(buff));
-        bytelen = recv(th->socket_client, buff, MAXBUFFLEN, 0);
+        bzero(msg_recved.msg, MAXBUFFLEN+1);
+        bytelen = recv(th->socket_client, (char*)&msg_recved, sizeof(msg_recved), 0);
         if(bytelen < 0){
-            //caused by broken pipe
-            //perror("[ERROR] recv(): ");
             emit th->connection_interrupted();
             break;
         }
         else if(bytelen == 0){
-            // server socket closed.
-            // caused by register finished or logout accepted
             break;
         }
-        parseRMsg(buff, msg_);
-        th->thread_pool.start(new msgRecver(bytelen, msg_, th));
+        printf("[INFO] Message: %s\n", msg_recved.msg);
+        th->thread_pool.start(new msgRecver(msg_recved, th));
         {
             boost::shared_lock<boost::shared_mutex>(th->mutexRunning);
             if(!th->is_Running){
@@ -115,11 +114,11 @@ void thread_client::loop(void* params){
     }
 }
 
-void thread_client::recvMsg(int bytelen, const typeMsg& msg_){
+void thread_client::recvMsg(const usermsg& msg_){
     if(msg_.btype == SERVER_FEEDBACK){
         if(0 == strcmp("Connection Established.", msg_.msg)){
-            outputLog(std::string("[INFO] Connection to server Established. Socket: ") + std::to_string(socket_client));
-            emit connection_established();
+            //outputLog(std::string("[INFO] Connection to server Established. Socket: ") + std::to_string(socket_client));
+            //emit connection_established();
             return;
         }
         else{
@@ -146,7 +145,8 @@ void thread_client::recvMsg(int bytelen, const typeMsg& msg_){
         }
     }
     else if(msg_.btype == SERVER_QUERY){
-        if(0 != strcmp("Not Found.", msg_.msg)){
+        if(0 != strlen(msg_.msg)){
+            printf("[INFO] Users found: %s", msg_.msg);
             emit users_found(msg_.msg);
         }
     }
@@ -158,7 +158,7 @@ void thread_client::recvMsg(int bytelen, const typeMsg& msg_){
         }
         int contact_tab_index = contacts[std::string(msg_.sock_src)];
         if(newCont){
-            outputLog(std::string("[INFO] Message from new."));
+            outputLog("[INFO] Message from new.");
             emit msgFromNew(contact_tab_index);
             newCont = false;
         }
@@ -174,30 +174,34 @@ void thread_client::recvMsg(int bytelen, const typeMsg& msg_){
             updateChatBox(contact_tab_index, 
                     "File from " + std::string(msg_.sock_src) + 
                     ": " + std::string(fname) + " " + std::to_string(fsize >> 10) + " kB");
-            recvFileThread = boost::thread(thread_client::recv_file, this, 
+            //recvFileThread = boost::thread(thread_client::recv_file, this, 
+                    //std::string(fname), std::string(msg_.sock_src), fsize);
+            boost::thread recvFileThread(thread_client::recv_file, this, 
                     std::string(fname), std::string(msg_.sock_src), fsize);
         }
     }
 }
 
-bool thread_client::sendMsg(const std::string& mssg, bool use_socket_file){
+bool thread_client::sendMsg(int btype, const std::string& dest, const std::string& msg, bool use_socket_file){
+    usermsg msg_sent;
+    msg_sent.btype = btype;
+    strcpy(msg_sent.sock_dest, dest.c_str());
+    strcpy(msg_sent.msg, msg.c_str());
     int sock = use_socket_file?socket_file:socket_client;
-    if(send(sock, mssg.c_str(), mssg.size(), 0) < 0){
+    if(send(sock, (char*)&msg_sent, sizeof(msg_sent), 0) < 0){
         perror("[ERROR] send()");
-        printf("[ERROR] Socket: %d.\n", sock);
-        outputLog("[ERROR] Message not sent due to interrupted connection.");
         emit connection_interrupted();
         return false;
     }
     else{
-        printf("[INFO] Sent message %s through %s.\n", mssg.c_str(), 
-            use_socket_file?"socket_file":"socket_client");
+        //printf("%s Sent message %s\n", msg.c_str(), msg_sent.msg);
         return true;
     }
 }
 
 void thread_client::transferFile(const std::string& filename, const std::string& dest){
-    sendFileThread = boost::thread(thread_client::transfer_file, (void*)this, filename, dest);
+    //sendFileThread = boost::thread(thread_client::transfer_file, (void*)this, filename, dest);
+    boost::thread sendFileThread(thread_client::transfer_file, (void*)this, filename, dest);
 }
 
 void thread_client::transfer_file(void* param, std::string filename, std::string dest){
@@ -214,8 +218,6 @@ void thread_client::transfer_file(void* param, std::string filename, std::string
     fseek(fp, 0L, SEEK_END);
     int fsize = ftell(fp);
     fclose(fp);
-    std::string fname_str = dest + " " + std::to_string(FILENAME) 
-        + " " + fname + " " + std::to_string(fsize);
 
     int fd;
     struct stat stat_buf;
@@ -228,22 +230,18 @@ void thread_client::transfer_file(void* param, std::string filename, std::string
 
     boost::unique_lock<boost::mutex> locker(th->mutexSendFile);
     
-    if(send(th->socket_client, fname_str.c_str(), fname_str.size(), 0) <= 0){
+    usermsg msg_sent;
+    msg_sent.btype = FILENAME;
+    strcpy(msg_sent.sock_dest, dest.c_str());
+    strcpy(msg_sent.msg, (fname + " " + std::to_string(fsize)).c_str());
+    if(send(th->socket_client, (char*)&msg_sent, sizeof(msg_sent), 0) <= 0){
         return;
     }
+    
     sendfile(th->socket_file, fd, &offset, stat_buf.st_size);
     close(fd);
-    //int flag = 1;
-    //setsockopt(th->socket_file, IPPROTO_TCP, TCP_NODELAY, (char*)&flag, sizeof(int));
-
-    //fname_str = dest + " " + std::to_string(FILEEND) + " " + fname;
-    //send(th->socket_client, fname_str.c_str(), fname_str.size(), 0);
-
-    //usleep(10000);
-    char stopbits[] = "__q__";
-    send(th->socket_file, stopbits, strlen(stopbits), 0);
-    //flag = 0;
-    //setsockopt(th->socket_file, IPPROTO_TCP, TCP_NODELAY, (char*)&flag, sizeof(int));
+    th->flushFileSocket();
+    printf("[INFO] file transfer finished: %s.\n", filename.c_str());
 }
 
 void thread_client::recv_file(void* param, std::string fname, std::string src, int fsize){
@@ -256,16 +254,11 @@ void thread_client::recv_file(void* param, std::string fname, std::string src, i
     {
         boost::unique_lock<boost::mutex> locker(th->mutexRecvFile);
         while(true){
-            bzero(buffer, MAXFILEBUFFLEN);
+            bzero(buffer, MAXFILEBUFFLEN+1);
             if((flen = recv(th->socket_file, buffer, MAXFILEBUFFLEN, 0)) <= 0){
                 break;
             }
-            //else if(flen < 6 && 0 == strcmp("__q__", buffer)){
-            //    printf("[FILE] finished.\n");
-            //    break;
-            //}
             fwrite(buffer, 1, flen, fd);
-            //printf("[FILE] received file buffer of size %d\n", flen);
             totalflen += flen;
             if(totalflen >= fsize){
                 printf("[FILE] finished: %s.\n", fname.c_str());
@@ -294,6 +287,13 @@ void thread_client::outputLog(const std::string& logcont){
     QVariant new_row(QString(log_model_msg.str().c_str()));
     log_model.setData(log_model.index(log_model.rowCount()-1), new_row);
     emit logUpdated();
+}
+
+void thread_client::flushFileSocket(){
+    int flag = 1; 
+    setsockopt(socket_file, IPPROTO_TCP, TCP_NODELAY, (char*) &flag, sizeof(flag));
+    flag = 0;
+    setsockopt(socket_file, IPPROTO_TCP, TCP_NODELAY, (char*) &flag, sizeof(flag));
 }
 
 QStringListModel* thread_client::chatBox(int tabind){
@@ -361,26 +361,15 @@ std::string thread_client::getContName(int ind){
     return tab_index[ind];
 }
 
-/*
-void thread_client::msgRecvd(){}
-
-void thread_client::fileRecvd(){}
-
-void thread_client::connection_rejected(){}
-
-void thread_client::connection_interrupted(){}
-*/
-
-msgRecver::msgRecver(int blen, const typeMsg& _msg, thread_client* client_){
+msgRecver::msgRecver(const usermsg& _msg, thread_client* client_){
     client = client_;
     msg_ = _msg;
-    bytelen = blen;
 }
 
 msgRecver::~msgRecver(){}
 
 void msgRecver::run(){
-    client->recvMsg(bytelen, msg_);
+    client->recvMsg(msg_);
 }
 
 std::string getFname(const std::string& filename){

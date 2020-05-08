@@ -25,9 +25,8 @@ TabPage::~TabPage(){
 void TabPage::on_send_button_clicked(){
     std::string msg_content = ui->line_edit_msg->text().toStdString();
     if(msg_content.empty())  return;
-    std::string mssg = uname_dest + " " + std::to_string(MESSAGE) + " " + msg_content;
+    client_->sendMsg(MESSAGE, uname_dest, msg_content);
     std::string msg = std::string("I: ") + ui->line_edit_msg->text().toStdString();
-    client_->sendMsg(mssg);
     client_->updateChatBox(idx, msg);
 }
 

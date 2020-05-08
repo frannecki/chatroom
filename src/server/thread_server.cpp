@@ -30,7 +30,6 @@ bool thread_server::init(const std::string& addr_srv, const std::string& port_sr
 #endif
 
     if((socket_server = socket(AF_INET, SOCK_STREAM, 0)) < 0){
-        outputLog(std::string("[ERROR] Opening socket."));
         return false;
     }
     int optval = 1;
@@ -44,11 +43,9 @@ bool thread_server::init(const std::string& addr_srv, const std::string& port_sr
     printf("[INFO] IP: %s; Port: %d.\n", addr_srv.c_str(), port);
     if(bind(socket_server, (struct sockaddr*)&addr_server, sizeof(addr_server)) < 0){
         perror("[ERROR] Binding");
-        outputLog(std::string("[ERROR] Binding socket."));
         return false;
     }
     if(listen(socket_server, 20) < 0){
-        outputLog(std::string("[ERROR] Listening."));
         return false;
     }
     cntfd = 0;
@@ -65,7 +62,7 @@ bool thread_server::init(const std::string& addr_srv, const std::string& port_sr
     if((socket_stopper = accept(socket_server, (struct sockaddr*)&addr_server, &size)) < 0){
         return false;
     }
-    else  printf("[INFO]socket server: %d; socket_stopper: %d.\n", socket_server, socket_stopper);
+    else  printf("[INFO] socket server: %d; socket_stopper: %d.\n", socket_server, socket_stopper);
     connThread.join();
 
     outputLog("[INFO] Server initialized.");
@@ -115,13 +112,15 @@ void thread_server::loopTask(void* param){
         boost::unique_lock<boost::shared_mutex> locker(th->mutexRunning);
         th->is_Running = true;
     }
-    th->outputLog(std::string("[INFO] Listening..."));
     std::string str;
     int recvLen;
-    char buff[MAXBUFFLEN];
     char filebuff[MAXFILEBUFFLEN];
-    bzero(buff, MAXBUFFLEN);
-    typeMsg msg_;
+    char buff[MAXBUFFLEN];
+    usermsg msg_recved;
+    usermsg msg_sent;
+    bzero(msg_recved.msg, MAXBUFFLEN+1);
+    bzero(msg_sent.msg, MAXBUFFLEN+1);
+    bzero(buff, MAXBUFFLEN+1);
     int maxsock = std::max(th->socket_server, th->socket_stopper);
     
     ThreadPool msg_threadpool(20);
@@ -155,32 +154,25 @@ void thread_server::loopTask(void* param){
                     break;
                 }
             }
+
             else if(evfd == th->socket_server){
                 socklen_t size = sizeof(th->addr_client);
-                th->outputLog(std::string("[INFO] Waiting for client to connect..."));
                 if((th->socket_client = accept(th->socket_server, (struct sockaddr*)&(th->addr_server), &size)) < 0){
                     continue;
                 }
-                th->outputLog(std::string("[INFO] New client accepted."));
             
                 if(th->cntfd < MAXUSERNUM){
-                    //usleep(100000);
-                    bzero(buff, strlen(buff));
-                    recvLen = recv(th->socket_client, buff, MAXBUFFLEN, 0);
+                    recvLen = recv(th->socket_client, (char*)&msg_recved, sizeof(msg_recved), 0);
                     if(recvLen < 0){
-                        th->outputLog(std::string("[ERROR] recv() error! Closing client..."));
-                        perror("[ERROR] recv()");
                         close(th->socket_client);
                     }
                     else if(recvLen == 0){
-                        th->outputLog(std::string("[ERROR] Socket closed at client's side! Closing client..."));
                         close(th->socket_client);
                     }
                     else{
                         char username[15], password[20], tmpbuf[15];
-                        int request_code = 0;
-                        sscanf(buff, "%s %d %s", username, &request_code, password);
-                        if(request_code == CLIENT_FILE_SOCKET){
+                        sscanf(msg_recved.msg, "%s %s", username, password);
+                        if(CLIENT_FILE_SOCKET == msg_recved.btype){
                             if(th->contacts.count(std::string(username)) > 0){
                                 int id = th->contacts[std::string(username)];
                                 th->uIDs[id].sockfd_file = th->socket_client;
@@ -197,14 +189,13 @@ void thread_server::loopTask(void* param){
                         }
                         else if(th->contacts.count(std::string(username)) > 0){
                             th->outputLog(std::string("[ERROR] Clients with the same username! Closing client..."));
-                            composeMsg(buff, "server", SERVER_FEEDBACK, "Connection Rejected!");
-                            if(send(th->socket_client, buff, strlen(buff), 0) >= 0){
+                            composeMsg(msg_sent, "server", SERVER_FEEDBACK, "Connection Rejected!");
+                            if(send(th->socket_client, (char*)&msg_sent, sizeof(msg_sent), 0) >= 0){
                                 th->outputLog(std::string("[INFO] Rejection issued"));
                             }
-                            else  th->outputLog(std::string("[ERROR] Rejection not issued"));
                             close(th->socket_client);
                         }
-                        else if(request_code == CLIENT_LOGIN){
+                        else if(CLIENT_LOGIN == msg_recved.btype){
                             // query username in database;
                             unsigned int result_code = th->sql_task.loginUser(username, password);
                             if(LOGIN_VALID == result_code){
@@ -220,8 +211,8 @@ void thread_server::loopTask(void* param){
                                 }
                                 epoll_ctl(th->epfd, EPOLL_CTL_ADD, th->socket_client, &(th->uIDs[th->cntfd-1].ev));
                         
-                                composeMsg(buff, "server", SERVER_FEEDBACK, "Connection Established.");
-                                send(th->socket_client, buff, strlen(buff), 0);
+                                composeMsg(msg_sent, "server", SERVER_FEEDBACK, "Connection Established.");
+                                send(th->socket_client, (char*)&msg_sent, sizeof(msg_sent), 0);
                                 // retrieve pending messages from redis
 #ifdef MSGCACHE
                                 int num_messages = th->redis_task.getNumMsg(username);
@@ -235,33 +226,31 @@ void thread_server::loopTask(void* param){
                             }
                             else{
                                 th->outputLog("[ERROR] Invalid username or password! Closing client...");
-                                composeMsg(buff, "server", SERVER_FEEDBACK, "Login Failed.");
-                                if(send(th->socket_client, buff, strlen(buff), 0) >= 0){
+                                //printf("Invalid: %s %s %s\n", username, password, msg_recved.msg);
+                                composeMsg(msg_sent, "server", SERVER_FEEDBACK, "Login Failed.");
+                                if(send(th->socket_client, (char*)&msg_sent, sizeof(msg_sent), 0) >= 0){
                                     th->outputLog(std::string("[INFO] Rejection issued"));
                                 }
-                                else  th->outputLog(std::string("[ERROR] Rejection not issued"));
                                 close(th->socket_client);
                             }
                         }
-                        else if(request_code == CLIENT_REGISTER){
+                        else if(CLIENT_REGISTER == msg_recved.btype){
                             // insert user to db table;
                             if(REGISTERED == th->sql_task.insertUser(username, password)){
-                                composeMsg(buff, "server", SERVER_FEEDBACK, "Registration Succeeded.");
+                                composeMsg(msg_sent, "server", SERVER_FEEDBACK, "Registration Succeeded.");
+                                send(th->socket_client, (char*)&msg_sent, sizeof(msg_sent), 0);
                                 th->outputLog(std::string("[INFO] Registration Succeeded."));
-                                send(th->socket_client, buff, strlen(buff), 0);
                             }
                             else{
-                                composeMsg(buff, "server", SERVER_FEEDBACK, "Registration Failed.");
+                                composeMsg(msg_sent, "server", SERVER_FEEDBACK, "Registration Failed.");
+                                send(th->socket_client, (char*)&msg_sent, sizeof(msg_sent), 0);
                                 th->outputLog(std::string("[ERROR] Registration Failed!"));
-                                send(th->socket_client, buff, strlen(buff), 0);
                             }
-                            th->outputLog("[INFO] Closing socket...");
                             close(th->socket_client);
                         }
                         else{
-                            composeMsg(buff, "server", SERVER_FEEDBACK, "Undefined Request.");
-                            send(th->socket_client, buff, strlen(buff), 0);
-                            th->outputLog("[ERROR] Unrecognized request code " + std::to_string(request_code));
+                            composeMsg(msg_sent, "server", SERVER_FEEDBACK, "Undefined Request.");
+                            send(th->socket_client, (char*)&msg_sent, sizeof(msg_sent), 0);
                             close(th->socket_client);
                             continue;
                         }
@@ -269,68 +258,55 @@ void thread_server::loopTask(void* param){
                 }
                 else{
                     th->outputLog("[ERROR] Exceeded the maximum connections!");
-                    composeMsg(buff, "server", SERVER_FEEDBACK, "Connection Rejected!");
-                    if(send(th->socket_client, buff, strlen(buff), 0) >= 0){
+                    composeMsg(msg_sent, "server", SERVER_FEEDBACK, "Connection Rejected!");
+                    if(send(th->socket_client, (char*)&msg_sent, sizeof(msg_sent), 0) >= 0){
                         th->outputLog("[INFO] Rejection issued");
                     }
-                    else  th->outputLog("[ERROR] Rejection not issued");
                 }
             }
 
             else if(th->contacts_ind.count(evfd) > 0){
                 int i = th->contacts_ind[evfd];
-                bzero(buff, strlen(buff));
-                recvLen = recv(evfd, buff, MAXBUFFLEN, 0);
+                recvLen = recv(evfd, (char*)&msg_recved, sizeof(msg_recved), 0);
                 if(recvLen < 0){
-                    th->outputLog(std::string("[Error] recv() failed!"));
                     th->clrsocket(i);
                 }
                 if(recvLen == 0)  continue;
                 else{
-                    parseSMsg(buff, msg_);
                     th->outputLog("[INFO] Forwarding message from " + 
                               th->uIDs[i].uname + " to " + 
-                              std::string(msg_.sock_dest) + "...");
+                              std::string(msg_recved.sock_dest) + "...");
                     
-                    if(msg_.btype == CLIENT_LOGOUT){
+                    if(CLIENT_LOGOUT == msg_recved.btype){
                         th->outputLog("[INFO] Client logout requested.");
-                        composeMsg(buff, "server", SERVER_FEEDBACK, "Logout Accepted.");
-                        send(th->uIDs[i].sockfd, buff, strlen(buff), 0);
+                        composeMsg(msg_sent, "server", SERVER_FEEDBACK, "Logout Accepted.");
+                        send(th->uIDs[i].sockfd, (char*)&msg_sent, sizeof(msg_sent), 0);
                         th->clrsocket(i);
                     }
-                    else if(msg_.btype == USER_SEARCH){
+                    else if(USER_SEARCH == msg_recved.btype){
                         char users[100] = {'\0'};
                         MYSQL_RES* res;
-                        if(strlen(msg_.msg) > 0 && th->sql_task.queryUser(msg_.msg) == USER_VALID
+                        if(strlen(msg_recved.msg) > 0 && th->sql_task.queryUser(msg_recved.msg) == USER_VALID
                             && (res = th->sql_task.getResult()))
                         {
                             for(int i = 0; i < mysql_num_rows(res); ++i){
                                 MYSQL_ROW row = mysql_fetch_row(res);
                                 if(strlen(users) + strlen(row[1]) + 1 >= 100)  break;
-                                strcat(users, " ");
                                 strcat(users, row[1]);
+                                strcat(users, " ");
                             }
                         }
-                        composeMsg(buff, "server", SERVER_QUERY, users);
-                        send(th->uIDs[i].sockfd, buff, strlen(buff), 0);
+                        composeMsg(msg_sent, "server", SERVER_QUERY, users);
+                        send(th->uIDs[i].sockfd, (char*)&msg_sent, sizeof(msg_sent), 0);
                     }
-                    else if(msg_.btype == USER_SELECTION){
-                        //TODO;
-                    }
-                    /*
-                    else if(msg_.btype == FILEEND){
-                        int flag = 1;
-                        setsockopt(th->uIDs[i].sockfd_file_dest, IPPROTO_TCP, TCP_NODELAY, 
-                            (char*)&flag, sizeof(int));
-                    }*/
                     else{
-                        if(msg_.btype == FILENAME){
-                            std::string file_dest(msg_.sock_dest);
+                        if(FILENAME == msg_recved.btype){
+                            std::string file_dest(msg_recved.sock_dest);
                             if(th->contacts.count(file_dest)){
                                 th->uIDs[i].sockfd_file_dest = th->uIDs[th->contacts[file_dest]].sockfd_file;
                             }
                         }
-                        msg_threadpool.getTask(forwardGroupMsg, (void*)th, i, msg_);
+                        msg_threadpool.getTask(forwardGroupMsg, (void*)th, i, msg_recved);
                     }
                 }
             }
@@ -340,29 +316,30 @@ void thread_server::loopTask(void* param){
                 int flen = recv(evfd, filebuff, MAXFILEBUFFLEN, 0);
                 if(flen <= 0)  continue;
                 int i = th->contacts_ind[th->contacts_file[evfd]];
-                if(send(th->uIDs[i].sockfd_file_dest, filebuff, flen, 0) <= 0){
+                if(th->contacts_file.count(th->uIDs[i].sockfd_file_dest) > 0 && 
+                    send(th->uIDs[i].sockfd_file_dest, filebuff, flen, 0) <= 0)
+                {
                     perror("[ERROR] transfer file");
+                    printf("[ERROR] whose socket is %d\n", th->uIDs[i].sockfd_file_dest);
                 }
-                //printf("[FILE] transfered file buffer of size %d to %d\n", flen, th->uIDs[i].sockfd_file_dest);
             }
         }
         if(threadStopping)  break;
     }
 }
 
-void thread_server::forwardGroupMsg(void* ptr, int sender, const typeMsg &msg_)
+void thread_server::forwardGroupMsg(void* ptr, int sender, const usermsg &msg_)
 {
     
     thread_server *ts = (thread_server*)ptr;
     boost::shared_lock<boost::shared_mutex> locker(ts->mutexUIds);
-    if(msg_.msg[0] == '\0')  return;
-    char buffer[MAXBUFFLEN];
-    bzero(buffer, strlen(buffer));
-    composeMsg(buffer, ts->uIDs[sender].uname, msg_.btype, msg_.msg);
+    if(0 == strlen(msg_.msg))  return;
+    usermsg msg_sent;
+    composeMsg(msg_sent, ts->uIDs[sender].uname.c_str(), msg_.btype, msg_.msg);
     if(0 == strcmp(msg_.sock_dest, "All")){
         for(int i = 0; i < ts->cntfd; ++i){
             if(i != sender)
-                send(ts->uIDs[i].sockfd, buffer, strlen(buffer), 0);
+                send(ts->uIDs[i].sockfd, (char*)&msg_sent, sizeof(msg_sent), 0);
         }
     }
     else{
@@ -377,11 +354,10 @@ void thread_server::forwardGroupMsg(void* ptr, int sender, const typeMsg &msg_)
         }
         int recver = ts->contacts[std::string(msg_.sock_dest)];
         if(recver == sender)  return;
-        if(send(ts->uIDs[recver].sockfd, buffer, strlen(buffer), 0) >= 0){
+        if(send(ts->uIDs[recver].sockfd, (char*)&msg_sent, sizeof(msg_sent), 0) >= 0){
             ts->outputLog("[INFO] Sending to " + std::string(msg_.sock_dest) + "...");
         }
         else{
-            ts->outputLog("[ERROR] Sending failed. Closing client " + std::string(msg_.sock_dest));
             ts->clrsocket(recver);
             close(ts->uIDs[recver].sockfd);
         }
@@ -399,17 +375,13 @@ void thread_server::clrsocket(int idx){
     contacts.erase(uIDs[idx].uname);
     contacts_file.erase(uIDs[idx].sockfd_file);
     epoll_ctl(epfd, EPOLL_CTL_DEL, uIDs[idx].sockfd, &(uIDs[idx].ev));
-    //epoll_ctl(epfd, EPOLL_CTL_DEL, uIDs[cntfd-1].sockfd, &(uIDs[cntfd-1].ev));
     epoll_ctl(epfd, EPOLL_CTL_DEL, uIDs[idx].sockfd_file, &(uIDs[idx].ev_file));
-    //epoll_ctl(epfd, EPOLL_CTL_DEL, uIDs[cntfd-1].sockfd_file, &(uIDs[cntfd-1].ev_file));
     uIDs[idx] = uIDs[--cntfd];
     if(cntfd > idx){
         contacts[uIDs[idx].uname] = idx;
         contacts_ind[uIDs[idx].sockfd] = idx;
     }
     }
-    //epoll_ctl(epfd, EPOLL_CTL_ADD, uIDs[idx].sockfd, &(uIDs[idx].ev));
-    //epoll_ctl(epfd, EPOLL_CTL_ADD, uIDs[idx].sockfd_file, &(uIDs[idx].ev_file));
     uIDs[cntfd].reset();
 }
 

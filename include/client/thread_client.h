@@ -38,8 +38,8 @@ public:
     ~thread_client();
     void closeAll();
     bool init(const std::string&, const std::string&, int);
-    bool sendMsg(const std::string&, bool use_socket_file = false);
-    void recvMsg(int, const typeMsg&);
+    bool sendMsg(int, const std::string&, const std::string&, bool use_socket_file = false);
+    void recvMsg(const usermsg&);
     void transferFile(const std::string&, const std::string&);
     QStringListModel* chatBox(int);
     QStringListModel* logModel();
@@ -73,8 +73,8 @@ signals:
 
 private:
     boost::thread workerThread;
-    boost::thread sendFileThread;
-    boost::thread recvFileThread;
+    //boost::thread sendFileThread;
+    //boost::thread recvFileThread;
     boost::shared_mutex mutexRunning;
     boost::mutex mutexRecvFile;
     boost::mutex mutexSendFile;
@@ -93,25 +93,20 @@ private:
     std::string tab_index[MAXCONTACTS+1];
     std::string tmpFileDir;
     FILE* recvfp;
-    
-    // for non blocking file recv
-    fd_set fs;
-    struct timeval tv;
 
-    void closeClient();
+    void flushFileSocket();
 };
 
 
 class msgRecver: public QObject, public QRunnable{
 public:
-    msgRecver(int, const typeMsg&, thread_client*);
+    msgRecver(const usermsg&, thread_client*);
     ~msgRecver();
 protected:
     void run();
 private:
     thread_client* client;
-    typeMsg msg_;
-    int bytelen;
+    usermsg msg_;
 };
 
 std::string getFname(const std::string&);

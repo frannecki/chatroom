@@ -82,7 +82,7 @@ void MainWindow::on_users_found(const char* users){
     int len = strlen(users);
     int idx = 0;
     while(idx < len){
-        if(idx == 0 || users[idx-1] == ' '){
+        if((idx == 0 || users[idx-1] == ' ') && users[idx] != ' '){
             sscanf(users+idx, "%s", user);
             ui->list_contacts->addItem(new QListWidgetItem(QIcon(":/images/chat.svg"), QString(user)));
         }
@@ -155,7 +155,7 @@ void MainWindow::on_quit_button_clicked(){
 void MainWindow::on_search_button_clicked(){
     ui->list_contacts->clear();
     std::string username = ui->line_edit_search->text().toStdString();
-    client_.sendMsg("server " + std::to_string(USER_SEARCH) + " " + username);
+    client_.sendMsg(USER_SEARCH, std::string("server"), username);
 }
 
 void MainWindow::on_connection_established(){

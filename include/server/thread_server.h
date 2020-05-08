@@ -30,16 +30,6 @@
 #include "redis_utils.h"
 #endif
 
-//using namespace socket_;
-/*
-using socket_::socket;
-using socket_::connect;
-using socket_::bind;
-using socket_::accept;
-using socket_::send;
-using socket_::recv;
-*/
-
 class thread_server: public QObject{
     Q_OBJECT
 
@@ -51,7 +41,7 @@ public:
     static void connectStopper(void*);
     QStringListModel* logModel();
     bool init(const std::string& addr_srv, const std::string& port_addr);
-    static void forwardGroupMsg(void*, int sender, const typeMsg&);
+    static void forwardGroupMsg(void*, int sender, const usermsg&);
 
 signals:
     void logUpdated();

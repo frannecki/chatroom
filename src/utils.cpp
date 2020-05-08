@@ -1,22 +1,10 @@
 #include "utils.h"
 
-void parseRMsg(char buff[], typeMsg &msg_){
-    msg_.msg[0] = '\0';
-    sscanf(buff, "%s %d %[^\n]", msg_.sock_src, &(msg_.btype), msg_.msg);
-}
-
-void parseSMsg(char buff[], typeMsg &msg_){
-    msg_.msg[0] = '\0';
-    sscanf(buff, "%s %d %[^\n]", msg_.sock_dest, &(msg_.btype), msg_.msg);
-}
-
-void composeMsg(char buff[], const std::string& sendername, int btype, const char* msg){
-    buff[0] = '\0';
-    strcat(buff, sendername.c_str());
-    strcat(buff, " ");
-    strcat(buff, std::to_string(btype).c_str());
-    strcat(buff, " ");
-    strcat(buff, msg);
+void composeMsg(usermsg& msg_, const char* sendername, int btype, const char* msg){
+    bzero(msg_.msg, MAXBUFFLEN+1);
+    msg_.btype = btype;
+    strcpy(msg_.sock_src, sendername);
+    strcpy(msg_.msg, msg);
 }
 
 bool isUsernameOrPasswordValid(const std::string& str){
@@ -25,8 +13,4 @@ bool isUsernameOrPasswordValid(const std::string& str){
         if(ch == ' ')  return false;
     }
     return true;
-}
-
-void getServerIp(){
-    //TODO;
 }
