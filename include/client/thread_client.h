@@ -7,6 +7,7 @@
 #include <QObject>
 #include <QThreadPool>
 #include <QRunnable>
+#include <QString>
 #include <iostream>
 #include <sstream>
 #include <string.h>
@@ -68,7 +69,7 @@ signals:
     void registration_failed();
     void login_failed();
     void file_open_error();
-    void file_recv_finished(const char*);
+    void file_recv_finished(const QString&);
     void users_found(const char*);
 
 private:

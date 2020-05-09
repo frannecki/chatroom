@@ -50,7 +50,7 @@ private slots:
     void on_msg_from_new(int);
     void on_contact_cancelled(int);
     void on_file_open_error();
-    void on_file_recv_finished(const char*);
+    void on_file_recv_finished(const QString&);
     void on_users_found(const char*);
     //void on_file_recvd(int, std::string);
     void on_loginRequested(std::string, std::string);

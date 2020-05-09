@@ -103,7 +103,6 @@ void thread_client::loop(void* params){
         else if(bytelen == 0){
             break;
         }
-        printf("[INFO] Message: %s\n", msg_recved.msg);
         th->thread_pool.start(new msgRecver(msg_recved, th));
         {
             boost::shared_lock<boost::shared_mutex>(th->mutexRunning);
@@ -146,7 +145,7 @@ void thread_client::recvMsg(const usermsg& msg_){
     }
     else if(msg_.btype == SERVER_QUERY){
         if(0 != strlen(msg_.msg)){
-            printf("[INFO] Users found: %s", msg_.msg);
+            printf("[INFO] User(s) found: %s\n", msg_.msg);
             emit users_found(msg_.msg);
         }
     }
@@ -170,7 +169,7 @@ void thread_client::recvMsg(const usermsg& msg_){
         else if(msg_.btype == FILENAME){
             char fname[100];
             int fsize;
-            sscanf(msg_.msg, "%s %d", fname, &fsize);
+            sscanf(msg_.msg, "%d %[^\n]", &fsize, fname);
             updateChatBox(contact_tab_index, 
                     "File from " + std::string(msg_.sock_src) + 
                     ": " + std::string(fname) + " " + std::to_string(fsize >> 10) + " kB");
@@ -183,6 +182,10 @@ void thread_client::recvMsg(const usermsg& msg_){
 }
 
 bool thread_client::sendMsg(int btype, const std::string& dest, const std::string& msg, bool use_socket_file){
+    if(msg.size() > MAXBUFFLEN){
+        printf("[ERROR] Message too long.\n");
+        return false;
+    }
     usermsg msg_sent;
     msg_sent.btype = btype;
     strcpy(msg_sent.sock_dest, dest.c_str());
@@ -208,12 +211,13 @@ void thread_client::transfer_file(void* param, std::string filename, std::string
     
     thread_client* th = (thread_client*)param;
     
-    int len = filename.size();
-    int startfname = len;
-    while(startfname > 0 && filename[startfname-1] != '/'){
-        --startfname;
-    }
-    std::string fname = filename.substr(startfname, len-startfname);
+    //int len = filename.size();
+    //int startfname = len;
+    //while(startfname > 0 && filename[startfname-1] != '/'){
+    //    --startfname;
+    //}
+    //std::string fname = filename.substr(startfname, len-startfname);
+    std::string fname = getFname(filename);
     FILE* fp = fopen(filename.c_str(), "rb");
     fseek(fp, 0L, SEEK_END);
     int fsize = ftell(fp);
@@ -226,6 +230,9 @@ void thread_client::transfer_file(void* param, std::string filename, std::string
         printf("[ERROR] Failed to open file %s!\n", filename.c_str());
         return;
     }
+    else{
+        printf("[INFO] file %s opened\n", filename.c_str());
+    }
     fstat(fd, &stat_buf);
 
     boost::unique_lock<boost::mutex> locker(th->mutexSendFile);
@@ -233,7 +240,7 @@ void thread_client::transfer_file(void* param, std::string filename, std::string
     usermsg msg_sent;
     msg_sent.btype = FILENAME;
     strcpy(msg_sent.sock_dest, dest.c_str());
-    strcpy(msg_sent.msg, (fname + " " + std::to_string(fsize)).c_str());
+    strcpy(msg_sent.msg, (std::to_string(fsize) + " " + fname).c_str());
     if(send(th->socket_client, (char*)&msg_sent, sizeof(msg_sent), 0) <= 0){
         return;
     }
@@ -267,7 +274,7 @@ void thread_client::recv_file(void* param, std::string fname, std::string src, i
         }
     }
     fclose(fd);
-    emit th->file_recv_finished(fname.c_str());
+    emit th->file_recv_finished(QString::fromStdString(fname));
 }
 
 void thread_client::updateChatBox(int contact, const std::string& cont){

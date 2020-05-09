@@ -25,7 +25,7 @@ MainWindow::MainWindow(int argc, char **argv, QWidget *parent):
     QObject::connect(&client_, SIGNAL(registration_failed()), &register_dialog, SLOT(on_registration_failed()));
     QObject::connect(&client_, SIGNAL(login_failed()), &login_dialog, SLOT(on_loginFailed()));
     QObject::connect(&client_, SIGNAL(users_found(const char*)), this, SLOT(on_users_found(const char*)));
-    QObject::connect(&client_, SIGNAL(file_recv_finished(const char*)), this, SLOT(on_file_recv_finished(const char*)));
+    QObject::connect(&client_, SIGNAL(file_recv_finished(const QString&)), this, SLOT(on_file_recv_finished(const QString&)));
     QObject::connect(&login_dialog, SIGNAL(loginRequested(std::string, std::string)), this, SLOT(on_loginRequested(std::string, std::string)));
     QObject::connect(&login_dialog, SIGNAL(loginDialogClosed()), this, SLOT(on_loginDialogClosed()));
     QObject::connect(&login_dialog, SIGNAL(signupRequested()), &register_dialog, SLOT(on_signupRequested()));
@@ -130,17 +130,17 @@ void MainWindow::on_action_Open_triggered(){
     if(filename.empty()){
         return;
     }
-    printf("[INFO] file %s opened\n", filename.c_str());
     client_.transferFile(filename, tabpages[tab_manager->currentIndex()].uname_dest);
 }
 
-void MainWindow::on_file_recv_finished(const char* fname){
+void MainWindow::on_file_recv_finished(const QString& fname){
     // get directory to save the file cache in .TEMP_${nickname};
-    QString filename = QFileDialog::getSaveFileName(this, tr("Save File"), QString(fname));
+    QString filename = QFileDialog::getSaveFileName(this, tr("Save File"), QString("./") + fname);
     if(filename.isEmpty()){
         return;
     }
-    std::string movTmpFile = "mv .TEMP_" + client_.getNickname() + "/" + std::string(fname) + " " + filename.toStdString();
+    std::string movTmpFile = "mv '.TEMP_" + client_.getNickname() + 
+        "/" + fname.toStdString() + "' '" + filename.toStdString() + "'";
     system(movTmpFile.c_str());
 }
 

@@ -51,10 +51,14 @@ struct usermsg{
     int btype;
     char sock_dest[MAXNAMELEN];
     char sock_src[MAXNAMELEN];
-    char msg[MAXBUFFLEN];
+    char msg[MAXBUFFLEN+1];
 };
 
 void composeMsg(usermsg&, const char* , int, const char*);
+
+void composeMsg(char buff[], const char*, int, const char*);
+
+void composeMsg(usermsg&, char buff[]);
 
 bool isUsernameOrPasswordValid(const std::string&);
 

@@ -3,7 +3,7 @@
 /lib
 /backup
 /CMakeFiles
-/.TEMP_*
+/*TEMP_*
 Makefile
 CMakeCache.txt
 *.cmake

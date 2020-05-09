@@ -218,9 +218,8 @@ void thread_server::loopTask(void* param){
                                 int num_messages = th->redis_task.getNumMsg(username);
                                 for(int idx_msg = 0; idx_msg < num_messages; ++idx_msg){
                                     const char* buf = th->redis_task.retrieveMsg();
-                                    if(msg_.btype == MESSAGE){
-                                        send(th->socket_client, buf, strlen(buf), 0);
-                                    }
+                                    composeMsg(msg_sent, (char*)buf);
+                                    send(th->socket_client, (char*)&msg_sent, sizeof(msg_sent), 0);
                                 }
 #endif
                             }
@@ -334,6 +333,11 @@ void thread_server::forwardGroupMsg(void* ptr, int sender, const usermsg &msg_)
     thread_server *ts = (thread_server*)ptr;
     boost::shared_lock<boost::shared_mutex> locker(ts->mutexUIds);
     if(0 == strlen(msg_.msg))  return;
+    
+    char buffer[MAXBUFFLEN];
+    bzero(buffer, sizeof(buffer));
+    composeMsg(buffer, ts->uIDs[sender].uname.c_str(), msg_.btype, msg_.msg);
+
     usermsg msg_sent;
     composeMsg(msg_sent, ts->uIDs[sender].uname.c_str(), msg_.btype, msg_.msg);
     if(0 == strcmp(msg_.sock_dest, "All")){
